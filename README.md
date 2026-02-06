@@ -2,6 +2,8 @@
 
 > Remove EXIF, GPS, and other metadata from images. Fast, lossless, zero dependencies.
 
+**[Try it online at picscrub.com](https://picscrub.com)** — no install needed, runs in your browser.
+
 [![npm version](https://badge.fury.io/js/picscrub.svg)](https://badge.fury.io/js/picscrub)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
