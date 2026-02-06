@@ -137,6 +137,7 @@ function processRemoval(data: Uint8Array, options: RemoveOptions): RemoveResult 
  * const blob = new Blob([result.data], { type: 'image/jpeg' });
  * ```
  */
+// eslint-disable-next-line @typescript-eslint/require-await
 export async function removeMetadata(
   input: Uint8Array | ArrayBuffer | string,
   options: RemoveOptions = {}

@@ -3,7 +3,6 @@ import { HeicProcessingError } from '../errors.js';
 import * as buffer from '../binary/buffer.js';
 import * as dataview from '../binary/dataview.js';
 
-
 /**
  * HEIC/HEIF uses ISOBMFF (ISO Base Media File Format)
  * Instead of removing metadata (which requires complex offset recalculation),
@@ -144,29 +143,41 @@ function findMetadataItemIds(
   const xmpIds = new Set<number>();
 
   const iinfBox = metaChildren.find(b => b.type === 'iinf');
-  if (!iinfBox) return { exifIds, xmpIds };
+  if (!iinfBox) {
+    return { exifIds, xmpIds };
+  }
 
   let offset = iinfBox.dataOffset;
   const end = iinfBox.offset + iinfBox.size;
-  if (offset + 4 > data.length) return { exifIds, xmpIds };
+  if (offset + 4 > data.length) {
+    return { exifIds, xmpIds };
+  }
 
   const version = data[offset]!;
   offset += 4; // skip version (1) + flags (3)
 
   // entry count
   if (version === 0) {
-    if (offset + 2 > data.length) return { exifIds, xmpIds };
+    if (offset + 2 > data.length) {
+      return { exifIds, xmpIds };
+    }
     offset += 2; // uint16 count
   } else {
-    if (offset + 4 > data.length) return { exifIds, xmpIds };
+    if (offset + 4 > data.length) {
+      return { exifIds, xmpIds };
+    }
     offset += 4; // uint32 count
   }
 
   // Parse infe (item info entry) boxes
   while (offset < end) {
     const header = parseBoxHeader(data, offset);
-    if (!header) break;
-    if (offset + header.size > end) break;
+    if (!header) {
+      break;
+    }
+    if (offset + header.size > end) {
+      break;
+    }
 
     if (header.type === 'infe') {
       const infeData = offset + header.headerSize;
@@ -211,13 +222,19 @@ function findItemLocations(
   targetIds: Set<number>
 ): Array<{ offset: number; length: number }> {
   const locations: Array<{ offset: number; length: number }> = [];
-  if (targetIds.size === 0) return locations;
+  if (targetIds.size === 0) {
+    return locations;
+  }
 
   const ilocBox = metaChildren.find(b => b.type === 'iloc');
-  if (!ilocBox) return locations;
+  if (!ilocBox) {
+    return locations;
+  }
 
   let offset = ilocBox.dataOffset;
-  if (offset + 8 > data.length) return locations;
+  if (offset + 8 > data.length) {
+    return locations;
+  }
 
   const version = data[offset]!;
   offset += 4; // skip version + flags
@@ -234,11 +251,15 @@ function findItemLocations(
   // Item count
   let itemCount: number;
   if (version < 2) {
-    if (offset + 2 > data.length) return locations;
+    if (offset + 2 > data.length) {
+      return locations;
+    }
     itemCount = dataview.readUint16BE(data, offset);
     offset += 2;
   } else {
-    if (offset + 4 > data.length) return locations;
+    if (offset + 4 > data.length) {
+      return locations;
+    }
     itemCount = dataview.readUint32BE(data, offset);
     offset += 4;
   }
@@ -249,11 +270,15 @@ function findItemLocations(
     // item_id
     let itemId: number;
     if (version < 2) {
-      if (offset + 2 > data.length) break;
+      if (offset + 2 > data.length) {
+        break;
+      }
       itemId = dataview.readUint16BE(data, offset);
       offset += 2;
     } else {
-      if (offset + 4 > data.length) break;
+      if (offset + 4 > data.length) {
+        break;
+      }
       itemId = dataview.readUint32BE(data, offset);
       offset += 4;
     }
@@ -271,7 +296,9 @@ function findItemLocations(
     offset += baseOffsetSize;
 
     // extent_count (2 bytes)
-    if (offset + 2 > data.length) break;
+    if (offset + 2 > data.length) {
+      break;
+    }
     const extentCount = dataview.readUint16BE(data, offset);
     offset += 2;
 
@@ -281,7 +308,9 @@ function findItemLocations(
         offset += indexSize;
       }
 
-      if (offset + offsetSize + lengthSize > data.length) break;
+      if (offset + offsetSize + lengthSize > data.length) {
+        break;
+      }
 
       const extentOffset = readSizedValue(data, offset, offsetSize);
       offset += offsetSize;
