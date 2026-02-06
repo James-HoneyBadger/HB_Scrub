@@ -1,0 +1,82 @@
+{
+  "name": "picscrub",
+  "version": "1.0.0",
+  "description": "Remove EXIF, GPS, and other metadata from images. Supports JPEG, PNG, WebP, GIF, SVG, TIFF, HEIC, and RAW formats.",
+  "type": "module",
+  "main": "dist/picscrub.cjs",
+  "module": "dist/picscrub.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/picscrub.js",
+      "require": "./dist/picscrub.cjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./heic": {
+      "import": "./dist/picscrub.heic.js",
+      "require": "./dist/picscrub.heic.cjs",
+      "types": "./dist/heic.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && tsc --emitDeclarationOnly",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build && npm run test && npm run lint"
+  },
+  "keywords": [
+    "exif",
+    "metadata",
+    "privacy",
+    "image",
+    "jpeg",
+    "png",
+    "webp",
+    "gif",
+    "svg",
+    "tiff",
+    "heic",
+    "dng",
+    "raw",
+    "strip",
+    "remove",
+    "anonymize"
+  ],
+  "author": "Fabio Souto",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fasouto/picscrub.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fasouto/picscrub/issues"
+  },
+  "homepage": "https://picscrub.com",
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.54.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "prettier": "^3.1.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0",
+    "vite-plugin-dts": "^3.6.0",
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
