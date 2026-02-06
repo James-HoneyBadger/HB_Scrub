@@ -116,12 +116,16 @@ function isDng(data: Uint8Array): boolean {
   const littleEndian = data[0] === 0x49;
   try {
     const ifdOffset = dataview.readUint32(data, 4, littleEndian);
-    if (ifdOffset + 2 > data.length) return false;
+    if (ifdOffset + 2 > data.length) {
+      return false;
+    }
     const numEntries = dataview.readUint16(data, ifdOffset, littleEndian);
 
     for (let i = 0; i < numEntries && i < 100; i++) {
       const entryOffset = ifdOffset + 2 + i * 12;
-      if (entryOffset + 12 > data.length) break;
+      if (entryOffset + 12 > data.length) {
+        break;
+      }
       const tag = dataview.readUint16(data, entryOffset, littleEndian);
       if (tag === 0xc612) {
         return true;
@@ -146,12 +150,16 @@ function detectRawFormat(data: Uint8Array): SupportedFormat {
   const littleEndian = data[0] === 0x49;
   try {
     const ifdOffset = dataview.readUint32(data, 4, littleEndian);
-    if (ifdOffset + 2 > data.length) return 'unknown';
+    if (ifdOffset + 2 > data.length) {
+      return 'unknown';
+    }
     const numEntries = dataview.readUint16(data, ifdOffset, littleEndian);
 
     for (let i = 0; i < numEntries && i < 100; i++) {
       const entryOffset = ifdOffset + 2 + i * 12;
-      if (entryOffset + 12 > data.length) break;
+      if (entryOffset + 12 > data.length) {
+        break;
+      }
       const tag = dataview.readUint16(data, entryOffset, littleEndian);
 
       // Tag 271 = Make
@@ -168,8 +176,12 @@ function detectRawFormat(data: Uint8Array): SupportedFormat {
           }
           if (valueOffset + count <= data.length) {
             const make = buffer.toAscii(data, valueOffset, Math.min(count, 50));
-            if (make.includes('NIKON')) return 'raw';
-            if (make.includes('SONY')) return 'raw';
+            if (make.includes('NIKON')) {
+              return 'raw';
+            }
+            if (make.includes('SONY')) {
+              return 'raw';
+            }
           }
         }
         break;

@@ -43,8 +43,12 @@ function detectRawFormat(data: Uint8Array): RawFormat {
   // Check for NEF/ARW via IFD Make tag
   const make = readMakeTag(data);
   if (make !== null) {
-    if (make.includes('NIKON')) return 'nef';
-    if (make.includes('SONY')) return 'arw';
+    if (make.includes('NIKON')) {
+      return 'nef';
+    }
+    if (make.includes('SONY')) {
+      return 'arw';
+    }
   }
 
   return 'unknown';
@@ -64,7 +68,9 @@ function isDng(data: Uint8Array): boolean {
   const littleEndian = data[0] === 0x49;
   try {
     const ifdOffset = dataview.readUint32(data, 4, littleEndian);
-    if (ifdOffset + 2 > data.length) return false;
+    if (ifdOffset + 2 > data.length) {
+      return false;
+    }
     const numEntries = dataview.readUint16(data, ifdOffset, littleEndian);
 
     for (let i = 0; i < numEntries && i < 100; i++) {
@@ -99,12 +105,16 @@ function readMakeTag(data: Uint8Array): string | null {
   const littleEndian = data[0] === 0x49;
   try {
     const ifdOffset = dataview.readUint32(data, 4, littleEndian);
-    if (ifdOffset + 2 > data.length) return null;
+    if (ifdOffset + 2 > data.length) {
+      return null;
+    }
     const numEntries = dataview.readUint16(data, ifdOffset, littleEndian);
 
     for (let i = 0; i < numEntries && i < 100; i++) {
       const entryOffset = ifdOffset + 2 + i * 12;
-      if (entryOffset + 12 > data.length) break;
+      if (entryOffset + 12 > data.length) {
+        break;
+      }
 
       const tag = dataview.readUint16(data, entryOffset, littleEndian);
       if (tag === 271) {
