@@ -6,6 +6,9 @@
   "main": "dist/picscrub.cjs",
   "module": "dist/picscrub.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "picscrub": "./dist/picscrub.cli.js"
+  },
   "exports": {
     ".": {
       "import": "./dist/picscrub.js",
@@ -16,6 +19,11 @@
       "import": "./dist/picscrub.heic.js",
       "require": "./dist/picscrub.heic.cjs",
       "types": "./dist/heic.d.ts"
+    },
+    "./node": {
+      "import": "./dist/picscrub.node.js",
+      "require": "./dist/picscrub.node.cjs",
+      "types": "./dist/node.d.ts"
     }
   },
   "files": [
