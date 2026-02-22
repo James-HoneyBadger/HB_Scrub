@@ -57,6 +57,67 @@ fileInput.addEventListener('change', async (e) => {
 });
 ```
 
+## Node.js / CLI
+
+### File API
+
+Process image files directly on disk:
+
+```typescript
+import { processFile } from 'picscrub/node';
+
+// Creates photo-clean.jpg alongside the original
+const result = await processFile('photo.jpg');
+
+// Overwrite the original
+await processFile('photo.jpg', { inPlace: true });
+
+// Custom output path
+await processFile('photo.jpg', { outputPath: 'clean/photo.jpg' });
+
+// Custom suffix
+await processFile('photo.jpg', { suffix: '-stripped' });
+
+// With preserve options
+await processFile('photo.jpg', {
+  preserveOrientation: true,
+  preserveColorProfile: true,
+});
+```
+
+### CLI
+
+```bash
+# Process files (creates *-clean.* versions)
+npx picscrub photo.jpg
+
+# Process multiple files
+npx picscrub *.jpg
+
+# Overwrite originals
+npx picscrub -i photo.jpg
+
+# Custom output
+npx picscrub -o clean.jpg photo.jpg
+
+# Preserve orientation
+npx picscrub --preserve-orientation photo.jpg
+```
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `-i, --in-place` | Overwrite original files |
+| `-o, --output <path>` | Output file (single file only) |
+| `-s, --suffix <suffix>` | Output suffix (default: "-clean") |
+| `--preserve-orientation` | Keep EXIF orientation tag |
+| `--preserve-color-profile` | Keep ICC color profile |
+| `--preserve-copyright` | Keep copyright notice |
+| `-q, --quiet` | Suppress output |
+| `-h, --help` | Show help |
+| `-v, --version` | Show version |
+
 ## API Reference
 
 ### `removeMetadata(input, options?)`
