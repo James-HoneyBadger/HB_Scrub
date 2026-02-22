@@ -19,7 +19,7 @@ export interface ProcessFileResult extends RemoveResult {
 
 export async function processFile(
   inputPath: string,
-  options: ProcessFileOptions = {},
+  options: ProcessFileOptions = {}
 ): Promise<ProcessFileResult> {
   const absInput = resolve(inputPath);
   const fileData = await readFile(absInput);
