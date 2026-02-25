@@ -1,28 +1,28 @@
 {
-  "name": "picscrub",
+  "name": "hb-scrub",
   "version": "1.1.0",
   "description": "Remove EXIF, GPS, and other metadata from images. Supports JPEG, PNG, WebP, GIF, SVG, TIFF, HEIC, and RAW formats.",
   "type": "module",
-  "main": "dist/picscrub.cjs",
-  "module": "dist/picscrub.js",
+  "main": "dist/hb-scrub.cjs",
+  "module": "dist/hb-scrub.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "picscrub": "./dist/picscrub.cli.js"
+    "hb-scrub": "./dist/hb-scrub.cli.js"
   },
   "exports": {
     ".": {
-      "import": "./dist/picscrub.js",
-      "require": "./dist/picscrub.cjs",
+      "import": "./dist/hb-scrub.js",
+      "require": "./dist/hb-scrub.cjs",
       "types": "./dist/index.d.ts"
     },
     "./heic": {
-      "import": "./dist/picscrub.heic.js",
-      "require": "./dist/picscrub.heic.cjs",
+      "import": "./dist/hb-scrub.heic.js",
+      "require": "./dist/hb-scrub.heic.cjs",
       "types": "./dist/heic.d.ts"
     },
     "./node": {
-      "import": "./dist/picscrub.node.js",
-      "require": "./dist/picscrub.node.cjs",
+      "import": "./dist/hb-scrub.node.js",
+      "require": "./dist/hb-scrub.node.cjs",
       "types": "./dist/node.d.ts"
     }
   },

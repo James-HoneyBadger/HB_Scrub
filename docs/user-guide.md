@@ -1,6 +1,6 @@
 # User Guide
 
-PicScrub removes EXIF, GPS, and other metadata from images through direct binary manipulation — no re-encoding, no quality loss.
+HB_Scrub removes EXIF, GPS, and other metadata from images through direct binary manipulation — no re-encoding, no quality loss.
 
 ---
 
@@ -21,7 +21,7 @@ PicScrub removes EXIF, GPS, and other metadata from images through direct binary
 ## Quick Start
 
 ```typescript
-import { removeMetadata } from 'picscrub';
+import { removeMetadata } from 'hb-scrub';
 
 const result = await removeMetadata(imageBytes); // Uint8Array
 
@@ -40,7 +40,7 @@ console.log(result.cleanedSize);      // 2_980_000
 ### From a file input
 
 ```typescript
-import { removeMetadata } from 'picscrub';
+import { removeMetadata } from 'hb-scrub';
 
 const input = document.querySelector('input[type="file"]');
 
@@ -66,7 +66,7 @@ input.addEventListener('change', async (e) => {
 ### From a data URL
 
 ```typescript
-import { removeMetadata } from 'picscrub';
+import { removeMetadata } from 'hb-scrub';
 
 const dataUrl = 'data:image/jpeg;base64,/9j/4AAQ...';
 const result = await removeMetadata(dataUrl);
@@ -84,7 +84,7 @@ const result = await removeMetadata(dataUrl);
 A synchronous version is also available:
 
 ```typescript
-import { removeMetadataSync } from 'picscrub';
+import { removeMetadataSync } from 'hb-scrub';
 
 const result = removeMetadataSync(imageBytes);
 ```
@@ -94,7 +94,7 @@ const result = removeMetadataSync(imageBytes);
 ### Inspecting metadata without removing it
 
 ```typescript
-import { getMetadataTypes } from 'picscrub';
+import { getMetadataTypes } from 'hb-scrub';
 
 const types = getMetadataTypes(imageBytes);
 // e.g. ['EXIF', 'GPS', 'ICC Profile', 'XMP']
@@ -103,7 +103,7 @@ const types = getMetadataTypes(imageBytes);
 ### Detecting the format
 
 ```typescript
-import { detectFormat, getMimeType } from 'picscrub';
+import { detectFormat, getMimeType } from 'hb-scrub';
 
 const format = detectFormat(imageBytes); // 'jpeg' | 'png' | ...
 const mime   = getMimeType(format);      // 'image/jpeg'
@@ -113,12 +113,12 @@ const mime   = getMimeType(format);      // 'image/jpeg'
 
 ## Node.js API
 
-Import from `picscrub/node` for file system operations.
+Import from `hb-scrub/node` for file system operations.
 
 ### Process a file
 
 ```typescript
-import { processFile } from 'picscrub/node';
+import { processFile } from 'hb-scrub/node';
 
 // Creates photo-clean.jpg in the same directory
 const result = await processFile('photo.jpg');
@@ -149,7 +149,7 @@ await processFile('photo.jpg', { suffix: '-stripped' });
 
 ### RAW files → JPEG output
 
-For proprietary RAW formats (CR2, NEF, ARW), PicScrub extracts the embedded JPEG preview and strips its metadata. The output file extension is automatically updated:
+For proprietary RAW formats (CR2, NEF, ARW), HB_Scrub extracts the embedded JPEG preview and strips its metadata. The output file extension is automatically updated:
 
 ```typescript
 const result = await processFile('photo.cr2');
@@ -176,71 +176,71 @@ await processFile('photo.jpg', {
 ### Basic usage
 
 ```bash
-picscrub <file...> [options]
+hb-scrub <file...> [options]
 ```
 
 ### Single file
 
 ```bash
-picscrub photo.jpg
+hb-scrub photo.jpg
 # → creates photo-clean.jpg
 ```
 
 ### Multiple files
 
 ```bash
-picscrub *.jpg
+hb-scrub *.jpg
 # → creates photo1-clean.jpg, photo2-clean.jpg, ...
 ```
 
 ### Overwrite originals
 
 ```bash
-picscrub photo.jpg --in-place
-picscrub photo.jpg -i
+hb-scrub photo.jpg --in-place
+hb-scrub photo.jpg -i
 ```
 
 ### Custom output path (single file only)
 
 ```bash
-picscrub photo.jpg --output output/clean.jpg
-picscrub photo.jpg -o output/clean.jpg
+hb-scrub photo.jpg --output output/clean.jpg
+hb-scrub photo.jpg -o output/clean.jpg
 ```
 
 ### Custom suffix
 
 ```bash
-picscrub photo.jpg --suffix -stripped
+hb-scrub photo.jpg --suffix -stripped
 # → creates photo-stripped.jpg
 ```
 
 ### Preserve options
 
 ```bash
-picscrub photo.jpg --preserve-orientation
-picscrub photo.jpg --preserve-color-profile
-picscrub photo.jpg --preserve-copyright
+hb-scrub photo.jpg --preserve-orientation
+hb-scrub photo.jpg --preserve-color-profile
+hb-scrub photo.jpg --preserve-copyright
 ```
 
 ### Quiet mode
 
 ```bash
-picscrub photo.jpg --quiet
-picscrub photo.jpg -q
+hb-scrub photo.jpg --quiet
+hb-scrub photo.jpg -q
 ```
 
 ### Show version
 
 ```bash
-picscrub --version
-picscrub -v
+hb-scrub --version
+hb-scrub -v
 ```
 
 ### Show help
 
 ```bash
-picscrub --help
-picscrub -h
+hb-scrub --help
+hb-scrub -h
 ```
 
 ### Exit codes
@@ -294,7 +294,7 @@ By default, all metadata is removed. Use these options to selectively keep speci
 ### Example
 
 ```typescript
-import { removeMetadata } from 'picscrub';
+import { removeMetadata } from 'hb-scrub';
 
 const result = await removeMetadata(imageBytes, {
   preserveOrientation: true,   // keep rotation info
@@ -309,23 +309,23 @@ const result = await removeMetadata(imageBytes, {
 
 ## HEIC Support
 
-HEIC processing is provided as a separate import to keep the core bundle small. Import it from `picscrub/heic`.
+HEIC processing is provided as a separate import to keep the core bundle small. Import it from `hb-scrub/heic`.
 
 ### Direct use
 
 ```typescript
-import { heic } from 'picscrub/heic';
+import { heic } from 'hb-scrub/heic';
 
 const cleaned = heic.remove(imageBytes);
 ```
 
 ### With the main API (auto-dispatch)
 
-The main `removeMetadata` function dispatches to the HEIC handler automatically once you import it. Import `picscrub/heic` anywhere in your module graph before calling `removeMetadata` with HEIC data:
+The main `removeMetadata` function dispatches to the HEIC handler automatically once you import it. Import `hb-scrub/heic` anywhere in your module graph before calling `removeMetadata` with HEIC data:
 
 ```typescript
-import { removeMetadata } from 'picscrub';
-import 'picscrub/heic'; // registers the HEIC handler
+import { removeMetadata } from 'hb-scrub';
+import 'hb-scrub/heic'; // registers the HEIC handler
 
 const result = await removeMetadata(heicBytes);
 ```
@@ -336,16 +336,16 @@ const result = await removeMetadata(heicBytes);
 
 ## Error Handling
 
-All errors extend `PicscrubError` and can be caught individually or together.
+All errors extend `HbScrubError` and can be caught individually or together.
 
 ```typescript
 import {
   removeMetadata,
-  PicscrubError,
+  HbScrubError,
   UnsupportedFormatError,
   CorruptedFileError,
   InvalidFormatError,
-} from 'picscrub';
+} from 'hb-scrub';
 
 try {
   const result = await removeMetadata(bytes);
@@ -359,8 +359,8 @@ try {
   } else if (err instanceof InvalidFormatError) {
     console.log(`Bad input: ${err.message}`);
 
-  } else if (err instanceof PicscrubError) {
-    console.log(`PicScrub error: ${err.message}`);
+  } else if (err instanceof HbScrubError) {
+    console.log(`HB_Scrub error: ${err.message}`);
 
   } else {
     throw err; // unexpected

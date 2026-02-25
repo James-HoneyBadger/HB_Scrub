@@ -1,6 +1,6 @@
 # Technical Reference
 
-Complete API reference for the `picscrub` library.
+Complete API reference for the `hb-scrub` library.
 
 ---
 
@@ -19,7 +19,7 @@ Complete API reference for the `picscrub` library.
 
 ## Main API
 
-Import from `'picscrub'`.
+Import from `'hb-scrub'`.
 
 ---
 
@@ -235,27 +235,27 @@ interface RemoveResult {
 
 ## Error Classes
 
-All errors extend `PicscrubError` which extends `Error`.
+All errors extend `HbScrubError` which extends `Error`.
 
 ```typescript
 import {
-  PicscrubError,
+  HbScrubError,
   InvalidFormatError,
   CorruptedFileError,
   BufferOverflowError,
   UnsupportedFormatError,
   HeicProcessingError,
   SvgParseError,
-} from 'picscrub';
+} from 'hb-scrub';
 ```
 
-### `PicscrubError`
+### `HbScrubError`
 
-Base class. All picscrub errors can be caught with `err instanceof PicscrubError`.
+Base class. All hb-scrub errors can be caught with `err instanceof HbScrubError`.
 
 ```typescript
-class PicscrubError extends Error {
-  name: string; // 'PicscrubError'
+class HbScrubError extends Error {
+  name: string; // 'HbScrubError'
 }
 ```
 
@@ -266,7 +266,7 @@ class PicscrubError extends Error {
 Thrown when the input value itself is invalid (e.g. a string that is not a data URL).
 
 ```typescript
-class InvalidFormatError extends PicscrubError {
+class InvalidFormatError extends HbScrubError {
   name: 'InvalidFormatError';
 }
 ```
@@ -278,7 +278,7 @@ class InvalidFormatError extends PicscrubError {
 Thrown when no handler is registered for the detected format.
 
 ```typescript
-class UnsupportedFormatError extends PicscrubError {
+class UnsupportedFormatError extends HbScrubError {
   name: 'UnsupportedFormatError';
   readonly format: string; // The detected format string
 }
@@ -291,7 +291,7 @@ class UnsupportedFormatError extends PicscrubError {
 Thrown when the file's binary structure is malformed.
 
 ```typescript
-class CorruptedFileError extends PicscrubError {
+class CorruptedFileError extends HbScrubError {
   name: 'CorruptedFileError';
   readonly offset: number | undefined; // Byte offset where corruption was detected
 }
@@ -304,7 +304,7 @@ class CorruptedFileError extends PicscrubError {
 Thrown when a read operation would extend past the end of the buffer. Usually indicates a corrupted or truncated file.
 
 ```typescript
-class BufferOverflowError extends PicscrubError {
+class BufferOverflowError extends HbScrubError {
   name: 'BufferOverflowError';
   readonly requested: number; // Bytes requested
   readonly available: number; // Bytes actually available
@@ -318,7 +318,7 @@ class BufferOverflowError extends PicscrubError {
 Thrown for HEIC-specific failures (malformed ISOBMFF boxes, missing `ftyp`, etc.).
 
 ```typescript
-class HeicProcessingError extends PicscrubError {
+class HeicProcessingError extends HbScrubError {
   name: 'HeicProcessingError';
 }
 ```
@@ -330,7 +330,7 @@ class HeicProcessingError extends PicscrubError {
 Thrown when the file does not contain a valid `<svg>` element.
 
 ```typescript
-class SvgParseError extends PicscrubError {
+class SvgParseError extends HbScrubError {
   name: 'SvgParseError';
 }
 ```
@@ -339,7 +339,7 @@ class SvgParseError extends PicscrubError {
 
 ## Node.js API
 
-Import from `'picscrub/node'`.
+Import from `'hb-scrub/node'`.
 
 ---
 
@@ -403,10 +403,10 @@ interface ProcessFileResult extends RemoveResult {
 Each format handler is exported individually for advanced use. All handlers share the same interface.
 
 ```typescript
-import { jpeg, png, webp, gif, svg, tiff, heic, raw } from 'picscrub';
+import { jpeg, png, webp, gif, svg, tiff, heic, raw } from 'hb-scrub';
 ```
 
-> Prefer importing from `picscrub/heic` for the HEIC handler.
+> Prefer importing from `hb-scrub/heic` for the HEIC handler.
 
 ### Common interface
 
@@ -422,7 +422,7 @@ Every handler exports at minimum:
 ### `jpeg`
 
 ```typescript
-import { jpeg } from 'picscrub';
+import { jpeg } from 'hb-scrub';
 
 jpeg.remove(data, options)        // Uint8Array
 jpeg.getMetadataTypes(data)       // string[]
@@ -436,7 +436,7 @@ Parses JPEG into segments (`FF xx <length> <data>`). Strips: EXIF (APP1), XMP (A
 ### `png`
 
 ```typescript
-import { png } from 'picscrub';
+import { png } from 'hb-scrub';
 
 png.remove(data, options)         // Uint8Array
 png.getMetadataTypes(data)        // string[]
@@ -450,7 +450,7 @@ Parses PNG into chunks. CRC-32 checksums are recomputed for all kept chunks. Str
 ### `webp`
 
 ```typescript
-import { webp } from 'picscrub';
+import { webp } from 'hb-scrub';
 
 webp.remove(data, options)        // Uint8Array
 webp.getMetadataTypes(data)       // string[]
@@ -464,7 +464,7 @@ Parses the RIFF container. Strips `EXIF` and `XMP` chunks. `ICCP` (color profile
 ### `gif`
 
 ```typescript
-import { gif } from 'picscrub';
+import { gif } from 'hb-scrub';
 
 gif.remove(data, options)         // Uint8Array
 gif.getMetadataTypes(data)        // string[]
@@ -478,7 +478,7 @@ Parses GIF blocks. Strips: Comment extensions (`0xFE`), XMP application extensio
 ### `svg`
 
 ```typescript
-import { svg } from 'picscrub';
+import { svg } from 'hb-scrub';
 
 svg.remove(data, options)         // Uint8Array
 svg.getMetadataTypes(data)        // string[]
@@ -491,7 +491,7 @@ SVG is text-based; processing is regex/string-based on the decoded UTF-8 content
 ### `tiff`
 
 ```typescript
-import { tiff } from 'picscrub';
+import { tiff } from 'hb-scrub';
 
 tiff.remove(data, options)        // Uint8Array
 tiff.getMetadataTypes(data)       // string[]
@@ -509,10 +509,10 @@ Tags conditionally kept: Orientation (274) if `preserveOrientation`, ICCProfile 
 
 ### `heic`
 
-Import from `picscrub/heic`:
+Import from `hb-scrub/heic`:
 
 ```typescript
-import { heic } from 'picscrub/heic';
+import { heic } from 'hb-scrub/heic';
 
 heic.remove(data, options)        // Uint8Array
 heic.getMetadataTypes(data)       // string[]
@@ -525,7 +525,7 @@ Processes ISOBMFF (ISO Base Media File Format) containers. Locates EXIF and XMP 
 ### `raw`
 
 ```typescript
-import { raw } from 'picscrub';
+import { raw } from 'hb-scrub';
 
 raw.remove(data, options)           // { data, isPreview, originalFormat }
 raw.removeDng(data, options)        // Uint8Array (delegates to tiff.remove)
@@ -554,9 +554,9 @@ raw.detectRawFormat(data)           // 'dng' | 'cr2' | 'cr3' | 'nef' | 'arw' | '
 Low-level helpers, exported for advanced use.
 
 ```typescript
-import * as buffer   from 'picscrub/buffer';   // or: import * as buffer from 'picscrub'
-import * as dataview from 'picscrub/dataview';
-import { crc32 }     from 'picscrub';
+import * as buffer   from 'hb-scrub/buffer';   // or: import * as buffer from 'hb-scrub'
+import * as dataview from 'hb-scrub/dataview';
+import { crc32 }     from 'hb-scrub';
 ```
 
 ### `buffer`
@@ -600,7 +600,7 @@ All 32-bit operations correctly handle values with the high bit set (unsigned) b
 ### `crc32`
 
 ```typescript
-import { crc32 } from 'picscrub';
+import { crc32 } from 'hb-scrub';
 
 crc32(data, initial?)                  // number — standard IEEE 802.3 CRC-32
 crc32Png(chunkType, chunkData)         // number — PNG chunk CRC (type + data)
@@ -615,7 +615,7 @@ crc32Png(chunkType, chunkData)         // number — PNG chunk CRC (type + data)
 Magic byte constants used for format detection.
 
 ```typescript
-import { FILE_SIGNATURES } from 'picscrub';
+import { FILE_SIGNATURES } from 'hb-scrub';
 
 FILE_SIGNATURES.JPEG      // Uint8Array [0xFF, 0xD8, 0xFF]
 FILE_SIGNATURES.JPEG_SOI  // Uint8Array [0xFF, 0xD8]
@@ -637,14 +637,14 @@ The build produces the following files in `dist/`:
 
 | File | Format | Entry point |
 |---|---|---|
-| `picscrub.js` | ESM | `src/index.ts` |
-| `picscrub.cjs` | CJS | `src/index.ts` |
-| `picscrub.node.js` | ESM | `src/node.ts` |
-| `picscrub.node.cjs` | CJS | `src/node.ts` |
-| `picscrub.heic.js` | ESM | `src/formats/heic.ts` |
-| `picscrub.heic.cjs` | CJS | `src/formats/heic.ts` |
-| `picscrub.cli.js` | ESM + shebang | `src/cli.ts` |
-| `picscrub.cli.cjs` | CJS | `src/cli.ts` |
+| `hb-scrub.js` | ESM | `src/index.ts` |
+| `hb-scrub.cjs` | CJS | `src/index.ts` |
+| `hb-scrub.node.js` | ESM | `src/node.ts` |
+| `hb-scrub.node.cjs` | CJS | `src/node.ts` |
+| `hb-scrub.heic.js` | ESM | `src/formats/heic.ts` |
+| `hb-scrub.heic.cjs` | CJS | `src/formats/heic.ts` |
+| `hb-scrub.cli.js` | ESM + shebang | `src/cli.ts` |
+| `hb-scrub.cli.cjs` | CJS | `src/cli.ts` |
 | `index.d.ts` | TypeScript | Main types |
 | `heic.d.ts` | TypeScript | HEIC types |
 | `node.d.ts` | TypeScript | Node.js types |

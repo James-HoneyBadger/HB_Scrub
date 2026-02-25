@@ -1,10 +1,10 @@
 /**
- * Base error class for picscrub errors
+ * Base error class for HB_Scrub errors
  */
-export class PicscrubError extends Error {
+export class HbScrubError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'PicscrubError';
+    this.name = 'HbScrubError';
     Object.setPrototypeOf(this, new.target.prototype);
   }
 }
@@ -12,7 +12,7 @@ export class PicscrubError extends Error {
 /**
  * Thrown when the input data is not a valid image format
  */
-export class InvalidFormatError extends PicscrubError {
+export class InvalidFormatError extends HbScrubError {
   constructor(message = 'Invalid or unsupported image format') {
     super(message);
     this.name = 'InvalidFormatError';
@@ -22,7 +22,7 @@ export class InvalidFormatError extends PicscrubError {
 /**
  * Thrown when the image file is corrupted or malformed
  */
-export class CorruptedFileError extends PicscrubError {
+export class CorruptedFileError extends HbScrubError {
   public readonly offset: number | undefined;
 
   constructor(message: string, offset?: number) {
@@ -35,7 +35,7 @@ export class CorruptedFileError extends PicscrubError {
 /**
  * Thrown when attempting to read beyond buffer bounds
  */
-export class BufferOverflowError extends PicscrubError {
+export class BufferOverflowError extends HbScrubError {
   public readonly requested: number;
   public readonly available: number;
 
@@ -50,7 +50,7 @@ export class BufferOverflowError extends PicscrubError {
 /**
  * Thrown when an unsupported format is encountered
  */
-export class UnsupportedFormatError extends PicscrubError {
+export class UnsupportedFormatError extends HbScrubError {
   public readonly format: string;
 
   constructor(format: string) {
@@ -63,7 +63,7 @@ export class UnsupportedFormatError extends PicscrubError {
 /**
  * Thrown when HEIC processing fails
  */
-export class HeicProcessingError extends PicscrubError {
+export class HeicProcessingError extends HbScrubError {
   constructor(message: string) {
     super(`HEIC processing error: ${message}`);
     this.name = 'HeicProcessingError';
@@ -73,7 +73,7 @@ export class HeicProcessingError extends PicscrubError {
 /**
  * Thrown when SVG parsing fails
  */
-export class SvgParseError extends PicscrubError {
+export class SvgParseError extends HbScrubError {
   constructor(message: string) {
     super(`SVG parse error: ${message}`);
     this.name = 'SvgParseError';

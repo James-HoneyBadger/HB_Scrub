@@ -11,33 +11,33 @@
 ## Library (npm)
 
 ```bash
-npm install picscrub
+npm install hb-scrub
 ```
 
 ```bash
-yarn add picscrub
+yarn add hb-scrub
 ```
 
 ```bash
-pnpm add picscrub
+pnpm add hb-scrub
 ```
 
-PicScrub has **zero runtime dependencies**. The install is self-contained.
+HB_Scrub has **zero runtime dependencies**. The install is self-contained.
 
 ---
 
 ## CLI (global)
 
-Install globally to use `picscrub` as a command-line tool:
+Install globally to use `hb-scrub` as a command-line tool:
 
 ```bash
-npm install -g picscrub
+npm install -g hb-scrub
 ```
 
 Verify the installation:
 
 ```bash
-picscrub --version
+hb-scrub --version
 ```
 
 ---
@@ -47,7 +47,7 @@ picscrub --version
 Run directly via `npx` without installing:
 
 ```bash
-npx picscrub photo.jpg
+npx hb-scrub photo.jpg
 ```
 
 Or if the package is installed locally in a project:
@@ -63,9 +63,9 @@ Or if the package is installed locally in a project:
 HEIC/HEIF processing is provided as a separate optional import. It is **not** included in the main bundle to keep the default bundle small (~50 KB).
 
 ```bash
-# No extra package needed — it ships inside picscrub
+# No extra package needed — it ships inside hb-scrub
 # Just import from the /heic subpath:
-import { heic } from 'picscrub/heic';
+import { heic } from 'hb-scrub/heic';
 ```
 
 See the [User Guide](./user-guide.md#heic) for usage details.
@@ -74,12 +74,12 @@ See the [User Guide](./user-guide.md#heic) for usage details.
 
 ## Module Formats
 
-PicScrub ships both ESM and CommonJS builds:
+HB_Scrub ships both ESM and CommonJS builds:
 
 | Import style | File used |
 |---|---|
-| `import` (ESM) | `dist/picscrub.js` |
-| `require` (CJS) | `dist/picscrub.cjs` |
+| `import` (ESM) | `dist/hb-scrub.js` |
+| `require` (CJS) | `dist/hb-scrub.cjs` |
 
 TypeScript type definitions are included at `dist/index.d.ts`. No `@types/` package is needed.
 
@@ -89,15 +89,15 @@ TypeScript type definitions are included at `dist/index.d.ts`. No `@types/` pack
 
 | Import path | Purpose |
 |---|---|
-| `picscrub` | Main browser/universal API |
-| `picscrub/node` | Node.js file system API |
-| `picscrub/heic` | HEIC format handler (optional, larger chunk) |
+| `hb-scrub` | Main browser/universal API |
+| `hb-scrub/node` | Node.js file system API |
+| `hb-scrub/heic` | HEIC format handler (optional, larger chunk) |
 
 ---
 
 ## Bundler Configuration
 
-PicScrub is tree-shakeable. If you only process JPEGs, unused format handlers (PNG, WebP, GIF, etc.) will be excluded from your bundle.
+HB_Scrub is tree-shakeable. If you only process JPEGs, unused format handlers (PNG, WebP, GIF, etc.) will be excluded from your bundle.
 
 ### Vite / Rollup
 
@@ -124,7 +124,7 @@ module.exports = nextConfig;
 ## Verifying the Installation
 
 ```typescript
-import { isFormatSupported, getSupportedFormats } from 'picscrub';
+import { isFormatSupported, getSupportedFormats } from 'hb-scrub';
 
 console.log(getSupportedFormats());
 // ['jpeg', 'png', 'webp', 'gif', 'svg', 'tiff', 'heic', 'dng', 'raw']
