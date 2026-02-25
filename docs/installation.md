@@ -53,7 +53,7 @@ npx hb-scrub photo.jpg
 Or if the package is installed locally in a project:
 
 ```bash
-./node_modules/.bin/picscrub photo.jpg
+./node_modules/.bin/hb-scrub photo.jpg
 ```
 
 ---
