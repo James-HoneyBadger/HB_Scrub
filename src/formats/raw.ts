@@ -226,14 +226,16 @@ function findJpegPreview(data: Uint8Array): Uint8Array | null {
         break;
       }
 
-      // Find end of JPEG
-      let endIdx = idx + 4;
-      while (endIdx < data.length - 1) {
-        if (data[endIdx] === 0xff && data[endIdx + 1] === 0xd9) {
-          endIdx += 2;
+      // Find end of JPEG by scanning backwards from the end of the buffer for
+      // the true EOI marker (0xFF 0xD9). A forward scan can stop on a false
+      // EOI inside entropy-coded Restart or scan data.
+      let endIdx = data.length - 1;
+      while (endIdx > idx + 4) {
+        if (data[endIdx - 1] === 0xff && data[endIdx] === 0xd9) {
+          endIdx++;
           break;
         }
-        endIdx++;
+        endIdx--;
       }
 
       const jpegSize = endIdx - idx;

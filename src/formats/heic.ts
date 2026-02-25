@@ -98,7 +98,7 @@ function parseContainerBox(data: Uint8Array, parent: HeicBox): HeicBox[] {
 
   while (offset < end) {
     const header = parseBoxHeader(data, offset);
-    if (!header || offset + header.size > end) {
+    if (!header || header.size === 0 || offset + header.size > end) {
       break;
     }
 
@@ -510,7 +510,11 @@ export function getMetadataTypes(data: Uint8Array): string[] {
     for (const loc of exifLocations) {
       const end = Math.min(loc.offset + loc.length, data.length);
       const exifData = data.slice(loc.offset, end);
-      if (buffer.indexOf(exifData, [0x88, 0x25]) !== -1) {
+      // Tag 0x8825 (GPSInfo IFD pointer) may be BE [0x88,0x25] or LE [0x25,0x88]
+      if (
+        buffer.indexOf(exifData, [0x88, 0x25]) !== -1 ||
+        buffer.indexOf(exifData, [0x25, 0x88]) !== -1
+      ) {
         types.push('GPS');
         break;
       }

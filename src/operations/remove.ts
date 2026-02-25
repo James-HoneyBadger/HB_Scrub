@@ -100,6 +100,18 @@ function processRemoval(data: Uint8Array, options: RemoveOptions): RemoveResult 
     const idx = removedMetadata.indexOf('Copyright');
     if (idx !== -1) removedMetadata.splice(idx, 1);
   }
+  if (options.preserveOrientation) {
+    const idx = removedMetadata.indexOf('Orientation');
+    if (idx !== -1) removedMetadata.splice(idx, 1);
+  }
+  if (options.preserveTitle) {
+    const idx = removedMetadata.indexOf('Title');
+    if (idx !== -1) removedMetadata.splice(idx, 1);
+  }
+  if (options.preserveDescription) {
+    const idx = removedMetadata.indexOf('Description');
+    if (idx !== -1) removedMetadata.splice(idx, 1);
+  }
 
   // Detect if output format differs from input (e.g., RAW -> JPEG preview)
   let outputFormat: SupportedFormat | undefined;
@@ -160,10 +172,10 @@ export async function removeMetadata(
  * Remove metadata from an image (sync version)
  */
 export function removeMetadataSync(
-  input: Uint8Array | ArrayBuffer,
+  input: Uint8Array | ArrayBuffer | string,
   options: RemoveOptions = {}
 ): RemoveResult {
-  const data = input instanceof ArrayBuffer ? new Uint8Array(input) : input;
+  const data = normalizeInput(input);
   return processRemoval(data, options);
 }
 
