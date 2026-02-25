@@ -121,9 +121,10 @@ function removeEditorAttributes(svgText: string): string {
 
   // Remove attributes with editor namespace prefixes
   for (const prefix of EDITOR_NAMESPACES) {
-    // Match attributes like inkscape:label="..."
+    // Match attributes like inkscape:label="..." or inkscape:label='...'
+    const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const attrPattern = new RegExp(
-      `\\s+${prefix.replace(':', ':')}[\\w-]+\\s*=\\s*["'][^"']*["']`,
+      `\\s+${escaped}[\\w-]+\\s*=\\s*(?:"[^"]*"|'[^']*')`,
       'gi'
     );
     result = result.replace(attrPattern, '');

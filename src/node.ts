@@ -23,7 +23,7 @@ export async function processFile(
 ): Promise<ProcessFileResult> {
   const absInput = resolve(inputPath);
   const fileData = await readFile(absInput);
-  const result = removeMetadataSync(new Uint8Array(fileData));
+  const result = removeMetadataSync(new Uint8Array(fileData), options);
 
   // Determine output path
   let absOutput: string;

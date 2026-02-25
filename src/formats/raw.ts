@@ -216,8 +216,8 @@ function findJpegPreview(data: Uint8Array): Uint8Array | null {
       }
     }
 
-    // Fallback: search for embedded JPEG
-    const jpegMarker = new Uint8Array([0xff, 0xd8, 0xff, 0xe1]); // JPEG with EXIF
+    // Fallback: search for embedded JPEG (match SOI + any APP marker)
+    const jpegMarker = new Uint8Array([0xff, 0xd8, 0xff]); // JPEG SOI
     let searchOffset = 100; // Skip header
 
     while (searchOffset < data.length - 4) {

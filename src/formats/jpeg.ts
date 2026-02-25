@@ -373,7 +373,6 @@ function shouldKeepSegment(segment: JpegSegment, options: RemoveOptions): boolea
  */
 export function remove(data: Uint8Array, options: RemoveOptions = {}): Uint8Array {
   const segments = parseSegments(data);
-  const removedMetadata: string[] = [];
   let orientation: number | null = null;
 
   // Extract orientation if we need to preserve it
@@ -406,21 +405,6 @@ export function remove(data: Uint8Array, options: RemoveOptions = {}): Uint8Arra
         keptSegments.push(segment.data);
       } else if (segment.marker === MARKERS.EOI) {
         keptSegments.push(new Uint8Array([0xff, 0xd9]));
-      }
-    } else {
-      // Track what was removed
-      if (isExifSegment(segment)) {
-        removedMetadata.push('EXIF');
-      } else if (isXmpSegment(segment)) {
-        removedMetadata.push('XMP');
-      } else if (isIccSegment(segment)) {
-        removedMetadata.push('ICC Profile');
-      } else if (isIptcSegment(segment)) {
-        removedMetadata.push('IPTC');
-      } else if (isAdobeSegment(segment)) {
-        removedMetadata.push('Adobe');
-      } else if (isCommentSegment(segment)) {
-        removedMetadata.push('Comment');
       }
     }
   }

@@ -332,23 +332,9 @@ function buildGif(blocks: GifBlock[]): Uint8Array {
  */
 export function remove(data: Uint8Array, options: RemoveOptions = {}): Uint8Array {
   const blocks = parseBlocks(data);
-  const removedMetadata: string[] = [];
 
   const filteredBlocks = blocks.filter(block => {
-    if (shouldKeepBlock(block, options)) {
-      return true;
-    }
-
-    // Track what was removed
-    if (isCommentExtension(block)) {
-      removedMetadata.push('Comment');
-    } else if (isXmpExtension(block)) {
-      removedMetadata.push('XMP');
-    } else if (block.extensionType === EXTENSIONS.APPLICATION) {
-      removedMetadata.push(`Application extension (${block.applicationId ?? 'unknown'})`);
-    }
-
-    return false;
+    return shouldKeepBlock(block, options);
   });
 
   return buildGif(filteredBlocks);
