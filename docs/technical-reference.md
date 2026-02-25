@@ -554,9 +554,7 @@ raw.detectRawFormat(data)           // 'dng' | 'cr2' | 'cr3' | 'nef' | 'arw' | '
 Low-level helpers, exported for advanced use.
 
 ```typescript
-import * as buffer   from 'hb-scrub/buffer';   // or: import * as buffer from 'hb-scrub'
-import * as dataview from 'hb-scrub/dataview';
-import { crc32 }     from 'hb-scrub';
+import { buffer, dataview, crc32 } from 'hb-scrub';
 ```
 
 ### `buffer`
