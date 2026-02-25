@@ -183,7 +183,6 @@ function getMetadataDescription(chunk: PngChunk): string {
  */
 export function remove(data: Uint8Array, options: RemoveOptions = {}): Uint8Array {
   const chunks = parseChunks(data);
-  const removedMetadata: string[] = [];
 
   const filteredChunks = chunks.filter(chunk => {
     // Always keep required chunks
@@ -196,13 +195,11 @@ export function remove(data: Uint8Array, options: RemoveOptions = {}): Uint8Arra
       if (options.preserveColorProfile === true) {
         return true;
       }
-      removedMetadata.push(getMetadataDescription(chunk));
       return false;
     }
 
     // Remove metadata chunks
     if (isMetadataChunk(chunk)) {
-      removedMetadata.push(getMetadataDescription(chunk));
       return false;
     }
 

@@ -91,6 +91,16 @@ function processRemoval(data: Uint8Array, options: RemoveOptions): RemoveResult 
   // Remove metadata
   const cleanedData = handler.remove(data, options);
 
+  // Filter out items that were actually preserved based on options
+  if (options.preserveColorProfile) {
+    const idx = removedMetadata.indexOf('ICC Profile');
+    if (idx !== -1) removedMetadata.splice(idx, 1);
+  }
+  if (options.preserveCopyright) {
+    const idx = removedMetadata.indexOf('Copyright');
+    if (idx !== -1) removedMetadata.splice(idx, 1);
+  }
+
   // Detect if output format differs from input (e.g., RAW -> JPEG preview)
   let outputFormat: SupportedFormat | undefined;
   if (format === 'raw') {
