@@ -24,7 +24,7 @@ function formatSize(bytes: number): string {
 }
 
 const HELP = `
-picscrub <file...> [options]
+hb-scrub <file...> [options]
 
 Remove EXIF, GPS, and other metadata from images.
 

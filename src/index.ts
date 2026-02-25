@@ -1,5 +1,5 @@
 /**
- * PicScrub - Image metadata removal library
+ * HB_Scrub - Image metadata removal library
  *
  * Remove EXIF, GPS, and other metadata from images.
  * Supports JPEG, PNG, WebP, GIF, SVG, TIFF, HEIC, and RAW formats.
@@ -24,7 +24,7 @@ export type { SupportedFormat, RemoveOptions, RemoveResult } from './types.js';
 
 // Error classes
 export {
-  PicscrubError,
+  HbScrubError,
   InvalidFormatError,
   CorruptedFileError,
   BufferOverflowError,

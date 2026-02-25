@@ -11,7 +11,7 @@ function shebangPlugin(): Plugin {
     name: 'shebang',
     generateBundle(_options, bundle) {
       for (const [fileName, chunk] of Object.entries(bundle)) {
-        if (fileName.includes('picscrub.cli') && chunk.type === 'chunk') {
+        if (fileName.includes('hb-scrub.cli') && chunk.type === 'chunk') {
           chunk.code = '#!/usr/bin/env node\n' + chunk.code;
         }
       }
@@ -30,10 +30,10 @@ export default defineConfig({
   build: {
     lib: {
       entry: {
-        picscrub: resolve(__dirname, 'src/index.ts'),
-        'picscrub.heic': resolve(__dirname, 'src/formats/heic.ts'),
-        'picscrub.node': resolve(__dirname, 'src/node.ts'),
-        'picscrub.cli': resolve(__dirname, 'src/cli.ts'),
+        'hb-scrub': resolve(__dirname, 'src/index.ts'),
+        'hb-scrub.heic': resolve(__dirname, 'src/formats/heic.ts'),
+        'hb-scrub.node': resolve(__dirname, 'src/node.ts'),
+        'hb-scrub.cli': resolve(__dirname, 'src/cli.ts'),
       },
       formats: ['es', 'cjs'],
       fileName: (format, entryName) => {
