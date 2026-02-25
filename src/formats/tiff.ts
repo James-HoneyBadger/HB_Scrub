@@ -11,12 +11,14 @@ const TAGS_TO_REMOVE: Set<number> = new Set([
   270, // ImageDescription
   271, // Make
   272, // Model
+  274, // Orientation — removed by default; preserved if preserveOrientation is set
   305, // Software
   306, // DateTime
   315, // Artist
   33432, // Copyright
   34665, // ExifIFDPointer - Remove entire EXIF IFD
   34853, // GPSInfoIFDPointer - Remove entire GPS IFD
+  34675, // ICCProfile — removed by default; preserved if preserveColorProfile is set
   700, // XMP
 ]);
 
@@ -122,6 +124,45 @@ function parseIfd(
 }
 
 /**
+ * Zero out a sub-IFD and all the data it references.
+ * Used to erase EXIF and GPS sub-IFD bodies after their pointer tags are removed.
+ */
+function zeroSubIfd(result: Uint8Array, ifdOffset: number, littleEndian: boolean): void {
+  if (ifdOffset === 0 || ifdOffset + 2 > result.length) {
+    return;
+  }
+  try {
+    const numEntries = dataview.readUint16(result, ifdOffset, littleEndian);
+    if (numEntries > 512) {
+      return; // sanity limit for corrupt data
+    }
+
+    // Zero non-inline value data referenced from each entry
+    for (let i = 0; i < numEntries; i++) {
+      const entryOffset = ifdOffset + 2 + i * 12;
+      if (entryOffset + 12 > result.length) break;
+
+      const type = dataview.readUint16(result, entryOffset + 2, littleEndian);
+      const count = dataview.readUint32(result, entryOffset + 4, littleEndian);
+      const typeSize = TYPE_SIZES[type] ?? 1;
+      const valueSize = typeSize * count;
+
+      if (valueSize > 4) {
+        const valueOffset = dataview.readUint32(result, entryOffset + 8, littleEndian);
+        const end = Math.min(valueOffset + valueSize, result.length);
+        for (let j = valueOffset; j < end; j++) result[j] = 0;
+      }
+    }
+
+    // Zero the IFD structure itself (entries + next-IFD pointer)
+    const ifdEnd = Math.min(ifdOffset + 2 + numEntries * 12 + 4, result.length);
+    for (let i = ifdOffset; i < ifdEnd; i++) result[i] = 0;
+  } catch {
+    // Ignore errors for malformed sub-IFDs
+  }
+}
+
+/**
  * Check if tag should be kept
  */
 function shouldKeepTag(tag: number, options: RemoveOptions): boolean {
@@ -201,6 +242,11 @@ export function remove(data: Uint8Array, options: RemoveOptions = {}): Uint8Arra
       for (let i = start; i < end; i++) {
         result[i] = 0;
       }
+    } else if (entry.tag === 34665 || entry.tag === 34853) {
+      // Pointer tags (ExifIFD, GPSInfoIFD) store the sub-IFD offset as an inline
+      // 4-byte LONG value. Without zeroing the pointed-to IFD the metadata remains
+      // in the file body even though the pointer tag is gone.
+      zeroSubIfd(result, entry.valueOffset, littleEndian);
     }
   }
 

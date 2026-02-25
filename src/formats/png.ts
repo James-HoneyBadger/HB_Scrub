@@ -143,6 +143,54 @@ function buildPng(chunks: PngChunk[]): Uint8Array {
 }
 
 /**
+ * Read the Orientation value (tag 0x0112) from a raw EXIF block.
+ * PNG eXIf chunks contain a raw TIFF-formatted EXIF block (II/MM header).
+ */
+function readOrientationFromRawExif(exifData: Uint8Array): number | null {
+  if (exifData.length < 8) return null;
+  try {
+    const byteOrder = buffer.toAscii(exifData, 0, 2);
+    const littleEndian = byteOrder === 'II';
+    const ifdOffset = dataview.readUint32(exifData, 4, littleEndian);
+    if (ifdOffset + 2 > exifData.length) return null;
+    const numEntries = dataview.readUint16(exifData, ifdOffset, littleEndian);
+    for (let i = 0; i < numEntries; i++) {
+      const entryOffset = ifdOffset + 2 + i * 12;
+      if (entryOffset + 12 > exifData.length) break;
+      const tag = dataview.readUint16(exifData, entryOffset, littleEndian);
+      if (tag === 0x0112 /* Orientation */) {
+        return dataview.readUint16(exifData, entryOffset + 8, littleEndian);
+      }
+    }
+  } catch {
+    // Ignore malformed EXIF
+  }
+  return null;
+}
+
+/**
+ * Build a minimal eXIf chunk containing only the Orientation tag (big-endian).
+ */
+function buildOrientationExifChunk(orientation: number): PngChunk {
+  // 8-byte TIFF header + 2-byte count + 12-byte entry + 4-byte next-IFD = 26 bytes
+  const data = new Uint8Array(26);
+  // TIFF header: big-endian, magic 0x002A, IFD0 at offset 8
+  data[0] = 0x4d; data[1] = 0x4d;           // 'MM' = big-endian
+  data[2] = 0x00; data[3] = 0x2a;           // TIFF magic
+  data[4] = 0x00; data[5] = 0x00; data[6] = 0x00; data[7] = 0x08; // IFD offset
+  // IFD: 1 entry
+  data[8] = 0x00; data[9] = 0x01;           // numEntries = 1
+  // Entry: tag=0x0112, type=SHORT(3), count=1, value=orientation
+  data[10] = 0x01; data[11] = 0x12;         // tag
+  data[12] = 0x00; data[13] = 0x03;         // type SHORT
+  data[14] = 0x00; data[15] = 0x00; data[16] = 0x00; data[17] = 0x01; // count
+  data[18] = 0x00; data[19] = orientation & 0xff; data[20] = 0x00; data[21] = 0x00; // value
+  // next IFD pointer = 0
+  data[22] = 0x00; data[23] = 0x00; data[24] = 0x00; data[25] = 0x00;
+  return { type: 'eXIf', data, crc: 0 };
+}
+
+/**
  * Check if chunk is metadata that should be removed
  */
 function isMetadataChunk(chunk: PngChunk): boolean {
@@ -184,6 +232,15 @@ function getMetadataDescription(chunk: PngChunk): string {
 export function remove(data: Uint8Array, options: RemoveOptions = {}): Uint8Array {
   const chunks = parseChunks(data);
 
+  // If orientation must be preserved, extract it from the eXIf chunk before filtering.
+  let savedOrientation: number | null = null;
+  if (options.preserveOrientation === true) {
+    const exifChunk = chunks.find(c => c.type === 'eXIf');
+    if (exifChunk) {
+      savedOrientation = readOrientationFromRawExif(exifChunk.data);
+    }
+  }
+
   const filteredChunks = chunks.filter(chunk => {
     // Always keep required chunks
     if (REQUIRED_CHUNKS.has(chunk.type)) {
@@ -207,6 +264,13 @@ export function remove(data: Uint8Array, options: RemoveOptions = {}): Uint8Arra
     // Ancillary chunks have lowercase first letter
     return true;
   });
+
+  // Re-inject a minimal eXIf with just Orientation immediately after IHDR
+  if (savedOrientation !== null) {
+    const ihdrIdx = filteredChunks.findIndex(c => c.type === 'IHDR');
+    const insertAt = ihdrIdx >= 0 ? ihdrIdx + 1 : 0;
+    filteredChunks.splice(insertAt, 0, buildOrientationExifChunk(savedOrientation));
+  }
 
   return buildPng(filteredChunks);
 }

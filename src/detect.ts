@@ -78,7 +78,7 @@ export function detectFormat(data: Uint8Array): SupportedFormat {
       return 'heic';
     }
     // AVIF uses similar ISOBMFF structure
-    if (brand === 'avif') {
+    if (brand.toLowerCase() === 'avif') {
       return 'heic';
     }
   }
@@ -210,8 +210,12 @@ function isSvg(data: Uint8Array): boolean {
     return str.includes('<svg');
   }
 
-  // Check for SVG namespace
-  if (str.includes('xmlns') && str.includes('svg')) {
+  // Check for SVG namespace — require the W3C SVG namespace URI to avoid false
+  // positives on XHTML or other XML documents that merely mention 'svg'.
+  if (
+    str.includes('xmlns') &&
+    (str.includes('http://www.w3.org/2000/svg') || str.includes('<svg'))
+  ) {
     return true;
   }
 

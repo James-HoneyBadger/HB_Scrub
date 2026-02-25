@@ -405,6 +405,9 @@ export function remove(data: Uint8Array, options: RemoveOptions = {}): Uint8Arra
         keptSegments.push(segment.data);
       } else if (segment.marker === MARKERS.EOI) {
         keptSegments.push(new Uint8Array([0xff, 0xd9]));
+      } else if (segment.marker >= 0xffd0 && segment.marker <= 0xffd7) {
+        // RST markers (restart markers) have no payload — re-emit the 2-byte marker
+        keptSegments.push(new Uint8Array([0xff, segment.marker & 0xff]));
       }
     }
   }
