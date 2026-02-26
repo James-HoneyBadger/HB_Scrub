@@ -1,8 +1,22 @@
 /**
  * Batch / directory processing for Node.js environments.
  *
- * Provides processDir() and processGlob() which walk all matching files,
- * run removeMetadata on each one, and return an AuditReport.
+ * Provides processDir() and processFiles() which walk matching files,
+ * run removeMetadata on each one concurrently, and return a BatchResult
+ * containing per-file AuditEntry records and an aggregate AuditReport.
+ *
+ * @example
+ * ```ts
+ * import { processDir } from 'hb-scrub/node';
+ *
+ * const { report } = await processDir('./photos', {
+ *   inPlace: false,
+ *   suffix: '-clean',
+ *   concurrency: 8,
+ *   dryRun: true,
+ * });
+ * console.log(`Would process ${report.totalFiles} files`);
+ * ```
  */
 
 import { readFile, writeFile, copyFile, mkdir, readdir, stat } from 'node:fs/promises';
@@ -172,9 +186,14 @@ async function runConcurrent<T>(
 /**
  * Process all supported image/document files in a directory.
  *
+ * Files are processed concurrently up to `options.concurrency` (default 4).
+ * A `BatchResult` is returned containing:
+ *  - `successful` / `failed` — arrays of `AuditEntry`
+ *  - `report` — aggregate `AuditReport` with byte counts and timestamps
+ *
  * @param dirPath    Path to the directory to scan.
  * @param options    Batch options (inPlace, outputDir, concurrency, dryRun, …)
- * @param recursive  Recurse into sub-directories (default: true)
+ * @param recursive  Recurse into sub-directories (default: `true`)
  */
 export async function processDir(
   dirPath: string,
@@ -189,8 +208,11 @@ export async function processDir(
 /**
  * Process an explicit list of file paths.
  *
+ * Unlike `processDir`, this function does not walk the filesystem — pass
+ * whatever paths you have already collected (e.g. from a glob library).
+ *
  * @param filePaths  Absolute or relative paths to process.
- * @param options    Batch options.
+ * @param options    Batch options (inPlace, concurrency, dryRun, …)
  */
 export async function processFiles(
   filePaths: string[],

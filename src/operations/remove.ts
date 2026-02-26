@@ -301,26 +301,38 @@ function processRemoval(data: Uint8Array, rawOptions: RemoveOptions): RemoveResu
 }
 
 /**
- * Remove metadata from an image
+ * Remove metadata from an image or document.
  *
- * @param input - Image data as Uint8Array, ArrayBuffer, or base64 data URL
- * @param options - Options for metadata removal
- * @returns Result containing cleaned image and metadata
+ * Supports JPEG, PNG, WebP, GIF, SVG, TIFF, HEIC, AVIF, PDF, MP4/MOV, DNG, and RAW.
+ * Input is never re-encoded — metadata is stripped at the byte level.
+ *
+ * @param input   - Image data: `Uint8Array`, `ArrayBuffer`, or base64 data URL
+ * @param options - Fine-grained control over what is kept or injected
+ * @returns       `RemoveResult` with `data` (cleaned bytes), `format`, `removedMetadata`, etc.
  *
  * @example
  * ```typescript
- * // From file input
- * const file = input.files[0];
- * const buffer = await file.arrayBuffer();
- * const result = await removeMetadata(new Uint8Array(buffer));
+ * // Strip all metadata
+ * const result = await removeMetadata(imageBytes);
  *
- * // With options
+ * // Keep orientation and color profile
  * const result = await removeMetadata(imageBytes, {
  *   preserveOrientation: true,
  *   preserveColorProfile: true,
  * });
  *
- * // Download cleaned image
+ * // Remove only GPS; leave everything else
+ * const result = await removeMetadata(imageBytes, { remove: ['GPS'] });
+ *
+ * // Truncate GPS to city-level precision instead of stripping
+ * const result = await removeMetadata(imageBytes, { gpsRedact: 'city' });
+ *
+ * // Inject a copyright notice after scrubbing
+ * const result = await removeMetadata(imageBytes, {
+ *   inject: { copyright: '© 2026 Jane Smith' },
+ * });
+ *
+ * // Download the cleaned image in a browser
  * const blob = new Blob([result.data], { type: 'image/jpeg' });
  * ```
  */
@@ -334,7 +346,10 @@ export async function removeMetadata(
 }
 
 /**
- * Remove metadata from an image (sync version)
+ * Synchronous version of `removeMetadata`.
+ *
+ * Identical behaviour — use when you cannot await (e.g. inside a Web Worker
+ * `onmessage` handler, a Rollup plugin, or a CLI tool).
  */
 export function removeMetadataSync(
   input: Uint8Array | ArrayBuffer | string,
@@ -345,7 +360,13 @@ export function removeMetadataSync(
 }
 
 /**
- * Get metadata types present in an image without removing them
+ * Return the names of metadata types present in a file without modifying it.
+ *
+ * @example
+ * ```typescript
+ * const types = getMetadataTypes(imageBytes);
+ * // ['EXIF', 'GPS', 'ICC Profile', 'XMP']
+ * ```
  */
 export function getMetadataTypes(input: Uint8Array | ArrayBuffer): string[] {
   const data = input instanceof ArrayBuffer ? new Uint8Array(input) : input;

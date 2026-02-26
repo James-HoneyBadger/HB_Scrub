@@ -1,26 +1,38 @@
 /**
  * Node.js Transform stream wrapper for hb-scrub.
  *
- * Usage:
+ * Buffers the entire input before processing because EXIF data can appear
+ * at any byte offset within a file — there is no incremental heuristic that
+ * is safe for all supported formats.
+ *
+ * Import from `hb-scrub/stream`:
  * ```ts
  * import { createScrubStream } from 'hb-scrub/stream';
  * import { createReadStream, createWriteStream } from 'node:fs';
  *
  * createReadStream('photo.jpg')
- *   .pipe(createScrubStream())
+ *   .pipe(createScrubStream({ preserveOrientation: true }))
+ *   .pipe(createWriteStream('photo-clean.jpg'));
+ *
+ * // With GPS redaction and copyright injection:
+ * createReadStream('photo.jpg')
+ *   .pipe(createScrubStream({
+ *     gpsRedact: 'city',
+ *     inject: { copyright: '© 2026 Jane Smith' },
+ *   }))
  *   .pipe(createWriteStream('photo-clean.jpg'));
  * ```
- *
- * The stream buffers the entire input because EXIF data can appear anywhere
- * in the file — there is no streaming heuristic that is safe for all formats.
  */
 
 import { Transform, type TransformOptions } from 'node:stream';
 import { removeMetadataSync } from './operations/remove.js';
 import type { RemoveOptions } from './types.js';
 
-// ─── ScrubTransform ───────────────────────────────────────────────────────────
-
+/**
+ * Transform stream that buffers input, scrubs metadata, and emits clean bytes.
+ *
+ * Instantiated via `createScrubStream(options)` rather than directly.
+ */
 export class ScrubTransform extends Transform {
   private readonly _scrubOptions: RemoveOptions;
   private _chunks: Buffer[] = [];
@@ -57,13 +69,13 @@ export class ScrubTransform extends Transform {
 // ─── Factory ──────────────────────────────────────────────────────────────────
 
 /**
- * Create a Node.js Transform stream that scrubs metadata from a piped file.
+ * Create a Node.js Transform stream that removes metadata from a piped file.
  *
- * Buffers the entire input before processing (required for correct EXIF
- * offset handling in binary formats like JPEG, PNG, etc.).
+ * All `RemoveOptions` are supported: preserve flags, GPS redaction, field
+ * allowlists/denylists, and metadata injection.
  *
- * @param options  Any RemoveOptions (preserve flags, gpsRedact, inject, etc.)
- * @returns        A Transform stream ready to be piped.
+ * @param options  Any `RemoveOptions` accepted by `removeMetadataSync`.
+ * @returns        A Transform stream. Pipe an image into it and read clean bytes out.
  */
 export function createScrubStream(options: RemoveOptions = {}): ScrubTransform {
   return new ScrubTransform(options);
