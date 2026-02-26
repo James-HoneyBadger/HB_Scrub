@@ -353,12 +353,33 @@ export function getMetadataTypes(data: Uint8Array): string[] {
   return [...new Set(types)];
 }
 
+import { readExifBlock } from '../exif/reader.js';
+import type { MetadataMap } from '../types.js';
+
+/**
+ * Read structured metadata from a RAW/DNG file without modifying it.
+ * Reads from the embedded JPEG preview if present, otherwise from IFD0.
+ */
+export function read(data: Uint8Array): Partial<MetadataMap> {
+  const out: Partial<MetadataMap> = {};
+  try {
+    // RAW files are TIFF-structured with EXIF in IFD0
+    const marker = buffer.fromAscii('Exif\x00\x00');
+    let exifOffset = buffer.indexOf(data, marker);
+    if (exifOffset !== -1) {
+      readExifBlock(data.slice(exifOffset + 6), out);
+    }
+  } catch { /* ignore */ }
+  return out;
+}
+
 export const raw = {
   remove,
   removeDng,
   extractCleanPreview,
   getMetadataTypes,
   detectRawFormat,
+  read,
 };
 
 export default raw;

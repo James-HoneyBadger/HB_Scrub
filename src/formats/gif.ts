@@ -364,10 +364,26 @@ export function getMetadataTypes(data: Uint8Array): string[] {
   return [...new Set(types)];
 }
 
+import type { MetadataMap } from '../types.js';
+
+/**
+ * Read structured metadata from a GIF without modifying it.
+ * GIF has no EXIF support — only XMP comments are surfaced.
+ */
+export function read(data: Uint8Array): Partial<MetadataMap> {
+  const out: Partial<MetadataMap> = {};
+  try {
+    const blocks = parseBlocks(data);
+    if (blocks.some(b => isXmpExtension(b))) out.hasXmp = true;
+  } catch { /* ignore */ }
+  return out;
+}
+
 export const gif = {
   remove,
   getMetadataTypes,
   parseBlocks,
+  read,
 };
 
 export default gif;

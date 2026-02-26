@@ -3,6 +3,10 @@ import { resolve, dirname, basename, extname, join } from 'node:path';
 import { removeMetadataSync } from './operations/remove.js';
 import type { RemoveOptions, RemoveResult } from './types.js';
 
+// Re-export batch processing and stream helpers for Node.js consumers
+export { processDir, processFiles } from './operations/batch.js';
+export { createScrubStream, ScrubTransform } from './node-stream.js';
+
 export interface ProcessFileOptions extends RemoveOptions {
   /** Overwrite the original file */
   inPlace?: boolean;

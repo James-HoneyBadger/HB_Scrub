@@ -4,6 +4,16 @@ import * as dataview from './binary/dataview.js';
 import { FILE_SIGNATURES } from './signatures.js';
 
 /**
+ * MP4 / MOV brand identifiers (from ftyp box)
+ */
+const MP4_BRANDS = [
+  'mp41', 'mp42', 'mp4v', 'isom', 'iso2', 'iso3', 'iso4', 'iso5', 'iso6',
+  'avc1', 'dash', 'M4V ', 'M4A ', 'M4P ', 'f4v ', 'f4p ',
+];
+
+const MOV_BRANDS = ['qt  ', 'qtvr'];
+
+/**
  * HEIC brand identifiers
  */
 const HEIC_BRANDS = [
@@ -30,13 +40,17 @@ const MIME_TYPES: Record<SupportedFormat, string> = {
   svg: 'image/svg+xml',
   tiff: 'image/tiff',
   heic: 'image/heic',
+  avif: 'image/avif',
   dng: 'image/x-adobe-dng',
   raw: 'image/x-raw',
+  pdf: 'application/pdf',
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
   unknown: 'application/octet-stream',
 };
 
 /**
- * Detect image format from binary data
+ * Detect image/document format from binary data
  */
 export function detectFormat(data: Uint8Array): SupportedFormat {
   if (data.length < 3) {
@@ -71,15 +85,41 @@ export function detectFormat(data: Uint8Array): SupportedFormat {
     return 'webp';
   }
 
-  // HEIC: ftyp box with HEIC brand
+  // PDF: starts with %PDF-
+  if (data.length >= 5 && buffer.startsWith(data, FILE_SIGNATURES.PDF)) {
+    return 'pdf';
+  }
+
+  // ISOBMFF containers (HEIC, AVIF, MP4, MOV): ftyp box at offset 4
   if (data.length >= 12 && buffer.matchesAt(data, 4, FILE_SIGNATURES.FTYP)) {
     const brand = buffer.toAscii(data, 8, 4);
-    if (HEIC_BRANDS.includes(brand.toLowerCase())) {
+    const brandLc = brand.toLowerCase().trim();
+
+    // HEIC / HEIF
+    if (HEIC_BRANDS.includes(brandLc)) {
       return 'heic';
     }
-    // AVIF uses similar ISOBMFF structure
-    if (brand.toLowerCase() === 'avif') {
-      return 'heic';
+    // AVIF — separate entry in SupportedFormat
+    if (brandLc === 'avif' || brandLc === 'avis') {
+      return 'avif';
+    }
+    // MOV (QuickTime)
+    if (MOV_BRANDS.includes(brand)) {
+      return 'mov';
+    }
+    // MP4
+    if (MP4_BRANDS.includes(brand) || brandLc.startsWith('mp4') || brandLc === 'isom') {
+      return 'mp4';
+    }
+    // Unknown ISOBMFF — check compatible brands in ftyp body
+    // Some files put the actual brand in the compatible brands list
+    if (data.length >= 16) {
+      for (let i = 16; i + 4 <= Math.min(data.length, 128); i += 4) {
+        const cb = buffer.toAscii(data, i, 4).toLowerCase().trim();
+        if (cb === 'avif' || cb === 'avis') return 'avif';
+        if (HEIC_BRANDS.includes(cb)) return 'heic';
+        if (MP4_BRANDS.includes(buffer.toAscii(data, i, 4))) return 'mp4';
+      }
     }
   }
 

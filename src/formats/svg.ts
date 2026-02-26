@@ -257,9 +257,28 @@ export function getMetadataTypes(data: Uint8Array): string[] {
   return [...new Set(types)];
 }
 
+import type { MetadataMap } from '../types.js';
+
+/**
+ * Read structured metadata from an SVG without modifying it.
+ */
+export function read(data: Uint8Array): Partial<MetadataMap> {
+  const out: Partial<MetadataMap> = {};
+  try {
+    const text = parseSvg(data);
+    const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(text);
+    if (titleMatch) out.imageDescription = titleMatch[1]!.trim();
+    const descMatch = /<desc[^>]*>([\s\S]*?)<\/desc>/i.exec(text);
+    if (descMatch) out.software = descMatch[1]!.trim();
+    if (/<metadata/i.test(text) || /rdf:RDF/i.test(text)) out.hasXmp = true;
+  } catch { /* ignore */ }
+  return out;
+}
+
 export const svg = {
   remove,
   getMetadataTypes,
+  read,
 };
 
 export default svg;

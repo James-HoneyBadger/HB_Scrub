@@ -1,4 +1,6 @@
 import { RemoveOptions } from '../types.js';
+import { readExifBlock } from '../exif/reader.js';
+import type { MetadataMap } from '../types.js';
 import { CorruptedFileError } from '../errors.js';
 import * as buffer from '../binary/buffer.js';
 import * as dataview from '../binary/dataview.js';
@@ -346,10 +348,35 @@ export function getMetadataTypes(data: Uint8Array): string[] {
   return [...new Set(types)];
 }
 
+/**
+ * Read structured metadata from a WebP without modifying it.
+ */
+export function read(data: Uint8Array): Partial<MetadataMap> {
+  const out: Partial<MetadataMap> = {};
+  try {
+    const chunks = parseChunks(data);
+    for (const chunk of chunks) {
+      if (chunk.fourcc === 'EXIF' && chunk.data.length >= 8) {
+        // WebP EXIF: optional 6-byte 'Exif\0\0' prefix
+        const hasPrefix =
+          chunk.data[0] === 0x45 && chunk.data[1] === 0x78 &&
+          chunk.data[2] === 0x69 && chunk.data[3] === 0x66;
+        readExifBlock(hasPrefix ? chunk.data.slice(6) : chunk.data, out);
+      } else if (chunk.fourcc === 'XMP ') {
+        out.hasXmp = true;
+      } else if (chunk.fourcc === 'ICCP') {
+        out.hasIcc = true;
+      }
+    }
+  } catch { /* ignore */ }
+  return out;
+}
+
 export const webp = {
   remove,
   getMetadataTypes,
   parseChunks,
+  read,
 };
 
 export default webp;

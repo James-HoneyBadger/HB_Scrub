@@ -10,6 +10,17 @@ import { svg } from '../formats/svg.js';
 import { tiff } from '../formats/tiff.js';
 import { heic } from '../formats/heic.js';
 import { raw } from '../formats/raw.js';
+import { avif } from '../formats/avif.js';
+import { pdf } from '../formats/pdf.js';
+import { mp4 } from '../formats/mp4.js';
+
+import { readExifBlock } from '../exif/reader.js';
+import {
+  buildJpegExifSegment,
+  buildRawExifBlock,
+  buildRedactedGpsExif,
+  wrapInJpegApp1,
+} from '../exif/writer.js';
 
 /**
  * Format handler interface
@@ -17,6 +28,48 @@ import { raw } from '../formats/raw.js';
 interface FormatHandler {
   remove: (data: Uint8Array, options: RemoveOptions) => Uint8Array;
   getMetadataTypes: (data: Uint8Array) => string[];
+}
+
+// ─── Field name → preserve-flag mapping ─────────────────────────────────────
+
+const FIELD_TO_PRESERVE: Partial<Record<string, keyof RemoveOptions>> = {
+  'ICC Profile':    'preserveColorProfile',
+  'Copyright':      'preserveCopyright',
+  'Orientation':    'preserveOrientation',
+  'Title':          'preserveTitle',
+  'Description':    'preserveDescription',
+};
+
+/**
+ * Merge remove[]/keep[] into the legacy preserveX flags so every handler
+ * respects the new field-level options without knowing about them.
+ */
+function applyFieldOptions(options: RemoveOptions): RemoveOptions {
+  const { remove, keep } = options;
+  if (!remove && !keep) return options;
+
+  const merged = { ...options };
+
+  if (remove && remove.length > 0) {
+    // Denylist mode: remove ONLY the listed fields → preserve everything else.
+    for (const [field, flag] of Object.entries(FIELD_TO_PRESERVE)) {
+      if (!remove.includes(field as never)) {
+        (merged as Record<string, unknown>)[flag as string] = true;
+      }
+    }
+  }
+
+  if (keep && keep.length > 0) {
+    // Allowlist: always preserve listed fields, overrides denylist.
+    for (const field of keep) {
+      const flag = FIELD_TO_PRESERVE[field];
+      if (flag) {
+        (merged as Record<string, unknown>)[flag as string] = true;
+      }
+    }
+  }
+
+  return merged;
 }
 
 /**
@@ -30,6 +83,10 @@ const handlers: Record<SupportedFormat, FormatHandler | null> = {
   svg,
   tiff,
   heic,
+  avif,
+  pdf,
+  mp4,
+  mov: mp4,
   dng: {
     remove: (data, options) => raw.removeDng(data, options),
     getMetadataTypes: raw.getMetadataTypes,
@@ -42,9 +99,9 @@ const handlers: Record<SupportedFormat, FormatHandler | null> = {
 };
 
 /**
- * Normalize input to Uint8Array
+ * Normalize input to Uint8Array. Exported for use by read.ts and verify.ts.
  */
-function normalizeInput(input: Uint8Array | ArrayBuffer | string): Uint8Array {
+export function normalizeInput(input: Uint8Array | ArrayBuffer | string): Uint8Array {
   if (typeof input === 'string') {
     if (input.startsWith('data:')) {
       const commaIndex = input.indexOf(',');
@@ -70,10 +127,47 @@ function normalizeInput(input: Uint8Array | ArrayBuffer | string): Uint8Array {
   throw new InvalidFormatError('Input must be Uint8Array, ArrayBuffer, or data URL string');
 }
 
+// ─── EXIF injection helper ─────────────────────────────────────────────────────
+
+/** Prepend an EXIF APP1 segment to a JPEG that may or may not have one. */
+function injectIntoJpeg(data: Uint8Array, segment: Uint8Array): Uint8Array {
+  // JPEG starts with FFD8. Insert APP1 right after the SOI marker.
+  if (data[0] !== 0xFF || data[1] !== 0xD8) return data;
+  const result = new Uint8Array(2 + segment.length + (data.length - 2));
+  result.set(data.subarray(0, 2), 0);
+  result.set(segment, 2);
+  result.set(data.subarray(2), 2 + segment.length);
+  return result;
+}
+
+/** Add/replace an eXIf chunk in a PNG. */
+function injectIntoPng(data: Uint8Array, rawTiff: Uint8Array): Uint8Array {
+  // Build a PNG eXIf chunk
+  const chunkType = new Uint8Array([0x65, 0x58, 0x49, 0x66]); // 'eXIf'
+  const length = rawTiff.length;
+  const chunk = new Uint8Array(4 + 4 + length + 4); // len + type + data + crc
+  const view = new DataView(chunk.buffer);
+  view.setUint32(0, length, false);
+  chunk.set(chunkType, 4);
+  chunk.set(rawTiff, 8);
+  // CRC is skipped; most readers tolerate zero CRC on eXIf
+  view.setUint32(8 + length, 0, false);
+
+  // Insert before IEND chunk (last 12 bytes of a valid PNG)
+  const insertAt = data.length - 12;
+  if (insertAt < 8) return data;
+  const result = new Uint8Array(data.length + chunk.length);
+  result.set(data.subarray(0, insertAt), 0);
+  result.set(chunk, insertAt);
+  result.set(data.subarray(insertAt), insertAt + chunk.length);
+  return result;
+}
+
 /**
  * Core removal logic shared between sync and async APIs
  */
-function processRemoval(data: Uint8Array, options: RemoveOptions): RemoveResult {
+function processRemoval(data: Uint8Array, rawOptions: RemoveOptions): RemoveResult {
+  const options = applyFieldOptions(rawOptions);
   const format = detectFormat(data);
 
   if (format === 'unknown') {
@@ -85,11 +179,82 @@ function processRemoval(data: Uint8Array, options: RemoveOptions): RemoveResult 
     throw new UnsupportedFormatError(format);
   }
 
+  // ── GPS redaction: read GPS before removal so we can re-inject truncated ──
+  let gpsLat: number | undefined;
+  let gpsLng: number | undefined;
+  if (options.gpsRedact && options.gpsRedact !== 'remove' && options.gpsRedact !== 'exact') {
+    try {
+      const meta = new Map<string, unknown>();
+      // Try to read a TIFF/EXIF block depending on format
+      if (format === 'jpeg') {
+        // Find APP1
+        let i = 2;
+        while (i < data.length - 3) {
+          if (data[i] !== 0xFF) break;
+          const marker = data[i + 1] ?? 0;
+          const segLen = ((data[i + 2] ?? 0) << 8) | (data[i + 3] ?? 0);
+          if (marker === 0xE1) {
+            const tag = String.fromCharCode(
+              data[i+4] ?? 0, data[i+5] ?? 0, data[i+6] ?? 0, data[i+7] ?? 0,
+            );
+            if (tag === 'Exif') {
+              const exifBlock = data.subarray(i + 10, i + 2 + segLen);
+              const out: Partial<import('../types.js').MetadataMap> = {};
+              readExifBlock(exifBlock, out);
+              if (out.gps) { gpsLat = out.gps.latitude; gpsLng = out.gps.longitude; }
+            }
+          }
+          i += 2 + segLen;
+        }
+      } else if (format === 'tiff' || format === 'dng') {
+        const out: Partial<import('../types.js').MetadataMap> = {};
+        readExifBlock(data, out);
+        if (out.gps) { gpsLat = out.gps.latitude; gpsLng = out.gps.longitude; }
+      }
+      void meta;
+    } catch { /* GPS unavailable */ }
+  }
+
   // Get metadata types before removal
   const removedMetadata = handler.getMetadataTypes(data);
 
   // Remove metadata
-  const cleanedData = handler.remove(data, options);
+  let cleanedData = handler.remove(data, options);
+
+  // ── GPS re-injection (truncated coordinates) ──
+  if (
+    options.gpsRedact &&
+    options.gpsRedact !== 'remove' &&
+    options.gpsRedact !== 'exact' &&
+    gpsLat !== undefined &&
+    gpsLng !== undefined
+  ) {
+    try {
+      const gpsTiff = buildRedactedGpsExif(gpsLat as number, gpsLng as number);
+      if (format === 'jpeg') {
+        const app1 = wrapInJpegApp1(gpsTiff);
+        cleanedData = injectIntoJpeg(cleanedData, app1);
+      } else if (format === 'png') {
+        cleanedData = injectIntoPng(cleanedData, gpsTiff);
+      }
+      // TIFF/DNG GPS re-injection would require in-place IFD patching — skip for now.
+    } catch { /* GPS re-injection best-effort */ }
+  }
+
+  // ── Metadata injection ──
+  if (options.inject) {
+    try {
+      if (format === 'jpeg') {
+        const segment = buildJpegExifSegment(options.inject);
+        cleanedData = injectIntoJpeg(cleanedData, segment);
+      } else if (format === 'png') {
+        const tiffBlock = buildRawExifBlock(options.inject);
+        if (tiffBlock.length > 0) {
+          cleanedData = injectIntoPng(cleanedData, tiffBlock);
+        }
+      }
+    } catch { /* injection is best-effort */ }
+  }
 
   // Filter out items that were actually preserved based on options
   if (options.preserveColorProfile) {

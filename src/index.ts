@@ -1,13 +1,13 @@
 /**
  * HB_Scrub - Image metadata removal library
  *
- * Remove EXIF, GPS, and other metadata from images.
- * Supports JPEG, PNG, WebP, GIF, SVG, TIFF, HEIC, and RAW formats.
+ * Remove EXIF, GPS, and other metadata from images and documents.
+ * Supports JPEG, PNG, WebP, GIF, SVG, TIFF, HEIC, AVIF, PDF, MP4/MOV, and RAW formats.
  *
  * @packageDocumentation
  */
 
-// Main API
+// Main removal API
 export {
   removeMetadata,
   removeMetadataSync,
@@ -16,11 +16,33 @@ export {
   getSupportedFormats,
 } from './operations/remove.js';
 
+// Metadata reading API
+export { readMetadata, readMetadataSync } from './operations/read.js';
+
+// Verification API
+export { verifyClean, verifyCleanSync } from './operations/verify.js';
+
 // Format detection
 export { detectFormat, getMimeType } from './detect.js';
 
 // Types
-export type { SupportedFormat, RemoveOptions, RemoveResult } from './types.js';
+export type {
+  SupportedFormat,
+  RemoveOptions,
+  RemoveResult,
+  ReadResult,
+  VerifyResult,
+  MetadataMap,
+  ExifData,
+  GpsCoordinates,
+  GpsRedactPrecision,
+  MetadataFieldName,
+  MetadataInjectOptions,
+  BatchOptions,
+  BatchResult,
+  AuditEntry,
+  AuditReport,
+} from './types.js';
 
 // Error classes
 export {
@@ -41,6 +63,9 @@ export { gif } from './formats/gif.js';
 export { svg } from './formats/svg.js';
 export { tiff } from './formats/tiff.js';
 export { heic } from './formats/heic.js';
+export { avif } from './formats/avif.js';
+export { pdf } from './formats/pdf.js';
+export { mp4 } from './formats/mp4.js';
 export { raw } from './formats/raw.js';
 
 // Binary utilities for advanced usage

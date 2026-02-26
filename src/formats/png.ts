@@ -1,4 +1,6 @@
 import { RemoveOptions } from '../types.js';
+import { readExifBlock } from '../exif/reader.js';
+import type { MetadataMap } from '../types.js';
 import { CorruptedFileError } from '../errors.js';
 import * as buffer from '../binary/buffer.js';
 import * as dataview from '../binary/dataview.js';
@@ -291,10 +293,33 @@ export function getMetadataTypes(data: Uint8Array): string[] {
   return [...new Set(types)];
 }
 
+/**
+ * Read structured metadata from a PNG without modifying it.
+ */
+export function read(data: Uint8Array): Partial<MetadataMap> {
+  const out: Partial<MetadataMap> = {};
+  try {
+    const chunks = parseChunks(data);
+    for (const chunk of chunks) {
+      if (chunk.type === 'eXIf' && chunk.data.length >= 8) {
+        readExifBlock(chunk.data, out);
+      } else if (chunk.type === 'iTXt' || chunk.type === 'tEXt' || chunk.type === 'zTXt') {
+        // Check for XMP in iTXt
+        const text = String.fromCharCode(...chunk.data.slice(0, Math.min(40, chunk.data.length)));
+        if (text.includes('XML:com.adobe.xmp') || text.includes('xpacket')) out.hasXmp = true;
+      } else if (chunk.type === 'iCCP') {
+        out.hasIcc = true;
+      }
+    }
+  } catch { /* ignore */ }
+  return out;
+}
+
 export const png = {
   remove,
   getMetadataTypes,
   parseChunks,
+  read,
 };
 
 export default png;
