@@ -1,8 +1,23 @@
 /**
- * readMetadata() — inspect the metadata present in an image/document without
+ * readMetadata() — inspect the metadata present in an image or document without
  * modifying it.
  *
- * Returns a structured MetadataMap plus the detected format and file size.
+ * Returns a structured `MetadataMap` (make, model, GPS, EXIF sub-fields, XMP
+ * presence flags, …) together with the detected format and file size.
+ *
+ * Supported for all formats that carry TIFF/EXIF blocks: JPEG, PNG, WebP,
+ * TIFF, HEIC, AVIF, DNG, RAW.  GIF and SVG return XMP/title fields.  PDF and
+ * MP4/MOV return available textual metadata.
+ *
+ * @example
+ * ```typescript
+ * import { readMetadata } from 'hb-scrub';
+ *
+ * const { metadata, format, fileSize } = await readMetadata(imageBytes);
+ * console.log(metadata.make);           // 'Apple'
+ * console.log(metadata.gps?.latitude);  // 51.505
+ * console.log(metadata.exif?.iso);      // 400
+ * ```
  */
 
 import { detectFormat } from '../detect.js';

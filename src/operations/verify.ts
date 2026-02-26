@@ -1,8 +1,23 @@
 /**
  * verifyClean() — confirm that no known metadata remains after scrubbing.
  *
- * Re-runs getMetadataTypes() on the supplied buffer and returns a VerifyResult
- * indicating whether the file is fully clean.
+ * Re-runs `getMetadataTypes()` on the supplied buffer and returns a
+ * `VerifyResult` with a boolean `clean` flag and any `remainingMetadata`
+ * type names that were detected.
+ *
+ * Use this as a post-processing assertion in pipelines that require
+ * a provably clean output before transmission or publication.
+ *
+ * @example
+ * ```typescript
+ * import { removeMetadata, verifyClean } from 'hb-scrub';
+ *
+ * const { data } = await removeMetadata(imageBytes);
+ * const { clean, remainingMetadata } = await verifyClean(data);
+ * if (!clean) {
+ *   console.warn('Residual metadata:', remainingMetadata);
+ * }
+ * ```
  */
 
 import { detectFormat } from '../detect.js';

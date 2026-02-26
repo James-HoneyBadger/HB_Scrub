@@ -154,61 +154,87 @@ export interface RemoveOptions {
 }
 
 /**
- * Result of removeMetadata / removeMetadataSync
+ * Result returned by `removeMetadata` / `removeMetadataSync`.
  */
 export interface RemoveResult {
+  /** Cleaned image/document bytes — write these to disk or a Blob. */
   data: Uint8Array;
+  /** Detected input format. */
   format: SupportedFormat;
+  /** Original file size in bytes. */
   originalSize: number;
+  /** Cleaned file size in bytes. */
   cleanedSize: number;
+  /** Names of metadata types that were removed (e.g. `['EXIF','GPS','XMP']`). */
   removedMetadata: string[];
+  /**
+   * Set when the output format differs from the input format.
+   * Currently only set when a RAW file is converted to its embedded JPEG preview.
+   */
   outputFormat?: SupportedFormat;
 }
 
 /**
- * Result of readMetadata()
+ * Result returned by `readMetadata` / `readMetadataSync`.
  */
 export interface ReadResult {
+  /** Structured metadata extracted from the file. */
   metadata: MetadataMap;
+  /** Detected file format. */
   format: SupportedFormat;
+  /** File size in bytes. */
   fileSize: number;
 }
 
 /**
- * Result of verifyClean()
+ * Result returned by `verifyClean` / `verifyCleanSync`.
  */
 export interface VerifyResult {
+  /** `true` when no known metadata types were detected. */
   clean: boolean;
+  /** Detected file format. */
   format: SupportedFormat;
+  /** Metadata type names still present (empty when `clean` is `true`). */
   remainingMetadata: string[];
 }
 
 /**
- * One file entry inside an AuditReport
+ * One file entry inside an `AuditReport`.
+ * Produced for every file attempted by `processDir` / `processFiles`.
  */
 export interface AuditEntry {
+  /** Absolute input path. */
   file: string;
+  /** Whether the file was processed successfully. */
   success: boolean;
+  /** `true` when the run was a dry-run — no bytes were written. */
   dryRun: boolean;
   format?: SupportedFormat;
   originalSize?: number;
   cleanedSize?: number;
+  /** Metadata type names that were removed. */
   removedMetadata?: string[];
+  /** Absolute path of the output file (absent for dry-runs). */
   outputPath?: string;
+  /** Error message when `success` is `false`. */
   error?: string;
 }
 
 /**
- * Aggregate report produced by processDir() / processGlob()
+ * Aggregate report produced by `processDir()` / `processFiles()`.
+ * Suitable for writing to a JSON file for audit trails.
  */
 export interface AuditReport {
+  /** ISO 8601 timestamp of when the run started. */
   timestamp: string;
   totalFiles: number;
   successful: number;
   failed: number;
+  /** Files skipped because of `dryRun: true` or `skipExisting: true`. */
   skipped: number;
   totalOriginalBytes: number;
   totalCleanedBytes: number;
+  /** Bytes removed across all files (`totalOriginalBytes − totalCleanedBytes`). */
   totalBytesRemoved: number;
   entries: AuditEntry[];
 }
