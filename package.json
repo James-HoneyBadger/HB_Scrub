@@ -1,7 +1,7 @@
 {
   "name": "hb-scrub",
   "version": "1.1.0",
-  "description": "Remove EXIF, GPS, and other metadata from images. Supports JPEG, PNG, WebP, GIF, SVG, TIFF, HEIC, and RAW formats.",
+  "description": "Remove EXIF, GPS, and other metadata from images and documents. Supports JPEG, PNG, WebP, GIF, SVG, TIFF, HEIC, AVIF, PDF, MP4/MOV, and RAW formats.",
   "type": "module",
   "main": "dist/hb-scrub.cjs",
   "module": "dist/hb-scrub.js",
@@ -24,6 +24,11 @@
       "types": "./dist/node.d.ts",
       "import": "./dist/hb-scrub.node.js",
       "require": "./dist/hb-scrub.node.cjs"
+    },
+    "./stream": {
+      "types": "./dist/node-stream.d.ts",
+      "import": "./dist/hb-scrub.stream.js",
+      "require": "./dist/hb-scrub.stream.cjs"
     }
   },
   "files": [
@@ -55,11 +60,19 @@
     "svg",
     "tiff",
     "heic",
+    "avif",
+    "pdf",
+    "mp4",
+    "mov",
     "dng",
     "raw",
+    "gps",
     "strip",
     "remove",
-    "anonymize"
+    "anonymize",
+    "redact",
+    "scrub",
+    "batch"
   ],
   "author": "Fabio Souto",
   "license": "MIT",

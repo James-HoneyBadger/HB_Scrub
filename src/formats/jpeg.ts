@@ -3,6 +3,8 @@ import { CorruptedFileError } from '../errors.js';
 import * as buffer from '../binary/buffer.js';
 import * as dataview from '../binary/dataview.js';
 import { FILE_SIGNATURES } from '../signatures.js';
+import { readExifBlock } from '../exif/reader.js';
+import type { MetadataMap } from '../types.js';
 
 /**
  * JPEG marker constants
@@ -441,10 +443,34 @@ export function getMetadataTypes(data: Uint8Array): string[] {
   return [...new Set(types)]; // Deduplicate
 }
 
+/**
+ * Read structured metadata from a JPEG without modifying it.
+ */
+export function read(data: Uint8Array): Partial<MetadataMap> {
+  const out: Partial<MetadataMap> = {};
+  try {
+    const segments = parseSegments(data);
+    for (const seg of segments) {
+      if (isExifSegment(seg) && seg.data.length >= 10) {
+        // Raw EXIF block starts at offset 10 (skip marker+length+"Exif\0\0")
+        readExifBlock(seg.data.slice(10), out);
+      } else if (isXmpSegment(seg)) {
+        out.hasXmp = true;
+      } else if (isIccSegment(seg)) {
+        out.hasIcc = true;
+      } else if (isIptcSegment(seg)) {
+        out.hasIptc = true;
+      }
+    }
+  } catch { /* ignore corrupt files */ }
+  return out;
+}
+
 export const jpeg = {
   remove,
   getMetadataTypes,
   parseSegments,
+  read,
 };
 
 export default jpeg;

@@ -3,6 +3,8 @@ import { CorruptedFileError } from '../errors.js';
 import * as buffer from '../binary/buffer.js';
 import * as dataview from '../binary/dataview.js';
 import { FILE_SIGNATURES } from '../signatures.js';
+import { parseGpsIfd, parseExifIfd, readEntryValue } from '../exif/reader.js';
+import type { MetadataMap } from '../types.js';
 
 /**
  * Tags to remove (metadata-related)
@@ -316,11 +318,56 @@ export function getMetadataTypes(data: Uint8Array): string[] {
   return [...new Set(types)];
 }
 
+/**
+ * Read structured metadata from a TIFF image without modifying it.
+ */
+export function read(data: Uint8Array): Partial<MetadataMap> {
+  const out: Partial<MetadataMap> = {};
+  try {
+    const { littleEndian: le, ifdOffset } = parseHeader(data);
+    const { entries } = parseIfd(data, ifdOffset, le);
+
+    const str = (tag: number) => {
+      const e = entries.find(x => x.tag === tag);
+      if (!e) return undefined;
+      return readEntryValue(data, e, le) as string | undefined;
+    };
+    const num = (tag: number) => {
+      const e = entries.find(x => x.tag === tag);
+      if (!e) return undefined;
+      return readEntryValue(data, e, le) as number | undefined;
+    };
+
+    const make = str(271); if (make) out.make = make;
+    const model = str(272); if (model) out.model = model;
+    const software = str(305); if (software) out.software = software;
+    const desc = str(270); if (desc) out.imageDescription = desc;
+    const artist = str(315); if (artist) out.artist = artist;
+    const copy = str(33432); if (copy) out.copyright = copy;
+    const dt = str(306); if (dt) out.dateTime = dt;
+    const orient = num(274); if (orient !== undefined) out.orientation = orient;
+    if (entries.find(x => x.tag === 34675)) out.hasIcc = true;
+    if (entries.find(x => x.tag === 700)) out.hasXmp = true;
+
+    const exifPtr = entries.find(x => x.tag === 34665);
+    if (exifPtr && !isInlineValue(exifPtr)) {
+      out.exif = parseExifIfd(data, exifPtr.valueOffset, le);
+    }
+    const gpsPtr = entries.find(x => x.tag === 34853);
+    if (gpsPtr && !isInlineValue(gpsPtr)) {
+      const gps = parseGpsIfd(data, gpsPtr.valueOffset, le);
+      if (gps) out.gps = gps;
+    }
+  } catch { /* ignore corrupt files */ }
+  return out;
+}
+
 export const tiff = {
   remove,
   getMetadataTypes,
   parseHeader,
   parseIfd,
+  read,
 };
 
 export default tiff;

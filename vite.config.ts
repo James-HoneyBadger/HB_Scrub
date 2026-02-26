@@ -33,6 +33,7 @@ export default defineConfig({
         'hb-scrub': resolve(__dirname, 'src/index.ts'),
         'hb-scrub.heic': resolve(__dirname, 'src/formats/heic.ts'),
         'hb-scrub.node': resolve(__dirname, 'src/node.ts'),
+        'hb-scrub.stream': resolve(__dirname, 'src/node-stream.ts'),
         'hb-scrub.cli': resolve(__dirname, 'src/cli.ts'),
       },
       formats: ['es', 'cjs'],
@@ -47,6 +48,7 @@ export default defineConfig({
         'node:fs/promises',
         'node:path',
         'node:url',
+        'node:stream',
       ],
       output: {
         preserveModules: false,

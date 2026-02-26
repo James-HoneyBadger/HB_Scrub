@@ -533,9 +533,28 @@ export function getMetadataTypes(data: Uint8Array): string[] {
   return [...new Set(types)];
 }
 
+import { readExifBlock } from '../exif/reader.js';
+import type { MetadataMap } from '../types.js';
+
+/**
+ * Read structured metadata from a HEIC/HEIF file without modifying it.
+ */
+export function read(data: Uint8Array): Partial<MetadataMap> {
+  const out: Partial<MetadataMap> = {};
+  try {
+    const { exif: locs } = findMetadataLocations(data);
+    for (const loc of locs) {
+      const slice = data.slice(loc.offset, Math.min(loc.offset + loc.length, data.length));
+      readExifBlock(slice, out);
+    }
+  } catch { /* ignore */ }
+  return out;
+}
+
 export const heic = {
   remove,
   getMetadataTypes,
+  read,
 };
 
 export default heic;
