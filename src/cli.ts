@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * hb-scrub CLI — comprehensive metadata scrubbing tool
  *
