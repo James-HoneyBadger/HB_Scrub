@@ -35,6 +35,7 @@ export default defineConfig({
         'hb-scrub.node': resolve(__dirname, 'src/node.ts'),
         'hb-scrub.stream': resolve(__dirname, 'src/node-stream.ts'),
         'hb-scrub.cli': resolve(__dirname, 'src/cli.ts'),
+        'hb-scrub.gui': resolve(__dirname, 'src/gui.ts'),
       },
       formats: ['es', 'cjs'],
       fileName: (format, entryName) => {
@@ -49,6 +50,7 @@ export default defineConfig({
         'node:path',
         'node:url',
         'node:stream',
+        'node:http',
       ],
       output: {
         preserveModules: false,
