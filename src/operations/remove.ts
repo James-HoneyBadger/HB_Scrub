@@ -33,11 +33,11 @@ interface FormatHandler {
 // ─── Field name → preserve-flag mapping ─────────────────────────────────────
 
 const FIELD_TO_PRESERVE: Partial<Record<string, keyof RemoveOptions>> = {
-  'ICC Profile':    'preserveColorProfile',
-  'Copyright':      'preserveCopyright',
-  'Orientation':    'preserveOrientation',
-  'Title':          'preserveTitle',
-  'Description':    'preserveDescription',
+  'ICC Profile': 'preserveColorProfile',
+  Copyright: 'preserveCopyright',
+  Orientation: 'preserveOrientation',
+  Title: 'preserveTitle',
+  Description: 'preserveDescription',
 };
 
 /**
@@ -46,7 +46,9 @@ const FIELD_TO_PRESERVE: Partial<Record<string, keyof RemoveOptions>> = {
  */
 function applyFieldOptions(options: RemoveOptions): RemoveOptions {
   const { remove, keep } = options;
-  if (!remove && !keep) return options;
+  if (!remove && !keep) {
+    return options;
+  }
 
   const merged = { ...options };
 
@@ -132,7 +134,9 @@ export function normalizeInput(input: Uint8Array | ArrayBuffer | string): Uint8A
 /** Prepend an EXIF APP1 segment to a JPEG that may or may not have one. */
 function injectIntoJpeg(data: Uint8Array, segment: Uint8Array): Uint8Array {
   // JPEG starts with FFD8. Insert APP1 right after the SOI marker.
-  if (data[0] !== 0xFF || data[1] !== 0xD8) return data;
+  if (data[0] !== 0xff || data[1] !== 0xd8) {
+    return data;
+  }
   const result = new Uint8Array(2 + segment.length + (data.length - 2));
   result.set(data.subarray(0, 2), 0);
   result.set(segment, 2);
@@ -155,7 +159,9 @@ function injectIntoPng(data: Uint8Array, rawTiff: Uint8Array): Uint8Array {
 
   // Insert before IEND chunk (last 12 bytes of a valid PNG)
   const insertAt = data.length - 12;
-  if (insertAt < 8) return data;
+  if (insertAt < 8) {
+    return data;
+  }
   const result = new Uint8Array(data.length + chunk.length);
   result.set(data.subarray(0, insertAt), 0);
   result.set(chunk, insertAt);
@@ -190,18 +196,26 @@ function processRemoval(data: Uint8Array, rawOptions: RemoveOptions): RemoveResu
         // Find APP1
         let i = 2;
         while (i < data.length - 3) {
-          if (data[i] !== 0xFF) break;
+          if (data[i] !== 0xff) {
+            break;
+          }
           const marker = data[i + 1] ?? 0;
           const segLen = ((data[i + 2] ?? 0) << 8) | (data[i + 3] ?? 0);
-          if (marker === 0xE1) {
+          if (marker === 0xe1) {
             const tag = String.fromCharCode(
-              data[i+4] ?? 0, data[i+5] ?? 0, data[i+6] ?? 0, data[i+7] ?? 0,
+              data[i + 4] ?? 0,
+              data[i + 5] ?? 0,
+              data[i + 6] ?? 0,
+              data[i + 7] ?? 0
             );
             if (tag === 'Exif') {
               const exifBlock = data.subarray(i + 10, i + 2 + segLen);
               const out: Partial<import('../types.js').MetadataMap> = {};
               readExifBlock(exifBlock, out);
-              if (out.gps) { gpsLat = out.gps.latitude; gpsLng = out.gps.longitude; }
+              if (out.gps) {
+                gpsLat = out.gps.latitude;
+                gpsLng = out.gps.longitude;
+              }
             }
           }
           i += 2 + segLen;
@@ -209,10 +223,15 @@ function processRemoval(data: Uint8Array, rawOptions: RemoveOptions): RemoveResu
       } else if (format === 'tiff' || format === 'dng') {
         const out: Partial<import('../types.js').MetadataMap> = {};
         readExifBlock(data, out);
-        if (out.gps) { gpsLat = out.gps.latitude; gpsLng = out.gps.longitude; }
+        if (out.gps) {
+          gpsLat = out.gps.latitude;
+          gpsLng = out.gps.longitude;
+        }
       }
       void meta;
-    } catch { /* GPS unavailable */ }
+    } catch {
+      /* GPS unavailable */
+    }
   }
 
   // Get metadata types before removal
@@ -230,7 +249,7 @@ function processRemoval(data: Uint8Array, rawOptions: RemoveOptions): RemoveResu
     gpsLng !== undefined
   ) {
     try {
-      const gpsTiff = buildRedactedGpsExif(gpsLat as number, gpsLng as number);
+      const gpsTiff = buildRedactedGpsExif(gpsLat, gpsLng);
       if (format === 'jpeg') {
         const app1 = wrapInJpegApp1(gpsTiff);
         cleanedData = injectIntoJpeg(cleanedData, app1);
@@ -238,7 +257,9 @@ function processRemoval(data: Uint8Array, rawOptions: RemoveOptions): RemoveResu
         cleanedData = injectIntoPng(cleanedData, gpsTiff);
       }
       // TIFF/DNG GPS re-injection would require in-place IFD patching — skip for now.
-    } catch { /* GPS re-injection best-effort */ }
+    } catch {
+      /* GPS re-injection best-effort */
+    }
   }
 
   // ── Metadata injection ──
@@ -253,29 +274,41 @@ function processRemoval(data: Uint8Array, rawOptions: RemoveOptions): RemoveResu
           cleanedData = injectIntoPng(cleanedData, tiffBlock);
         }
       }
-    } catch { /* injection is best-effort */ }
+    } catch {
+      /* injection is best-effort */
+    }
   }
 
   // Filter out items that were actually preserved based on options
   if (options.preserveColorProfile) {
     const idx = removedMetadata.indexOf('ICC Profile');
-    if (idx !== -1) removedMetadata.splice(idx, 1);
+    if (idx !== -1) {
+      removedMetadata.splice(idx, 1);
+    }
   }
   if (options.preserveCopyright) {
     const idx = removedMetadata.indexOf('Copyright');
-    if (idx !== -1) removedMetadata.splice(idx, 1);
+    if (idx !== -1) {
+      removedMetadata.splice(idx, 1);
+    }
   }
   if (options.preserveOrientation) {
     const idx = removedMetadata.indexOf('Orientation');
-    if (idx !== -1) removedMetadata.splice(idx, 1);
+    if (idx !== -1) {
+      removedMetadata.splice(idx, 1);
+    }
   }
   if (options.preserveTitle) {
     const idx = removedMetadata.indexOf('Title');
-    if (idx !== -1) removedMetadata.splice(idx, 1);
+    if (idx !== -1) {
+      removedMetadata.splice(idx, 1);
+    }
   }
   if (options.preserveDescription) {
     const idx = removedMetadata.indexOf('Description');
-    if (idx !== -1) removedMetadata.splice(idx, 1);
+    if (idx !== -1) {
+      removedMetadata.splice(idx, 1);
+    }
   }
 
   // Detect if output format differs from input (e.g., RAW -> JPEG preview)

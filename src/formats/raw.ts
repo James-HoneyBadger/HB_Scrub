@@ -365,11 +365,13 @@ export function read(data: Uint8Array): Partial<MetadataMap> {
   try {
     // RAW files are TIFF-structured with EXIF in IFD0
     const marker = buffer.fromAscii('Exif\x00\x00');
-    let exifOffset = buffer.indexOf(data, marker);
+    const exifOffset = buffer.indexOf(data, marker);
     if (exifOffset !== -1) {
       readExifBlock(data.slice(exifOffset + 6), out);
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return out;
 }
 

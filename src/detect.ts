@@ -7,8 +7,22 @@ import { FILE_SIGNATURES } from './signatures.js';
  * MP4 / MOV brand identifiers (from ftyp box)
  */
 const MP4_BRANDS = [
-  'mp41', 'mp42', 'mp4v', 'isom', 'iso2', 'iso3', 'iso4', 'iso5', 'iso6',
-  'avc1', 'dash', 'M4V ', 'M4A ', 'M4P ', 'f4v ', 'f4p ',
+  'mp41',
+  'mp42',
+  'mp4v',
+  'isom',
+  'iso2',
+  'iso3',
+  'iso4',
+  'iso5',
+  'iso6',
+  'avc1',
+  'dash',
+  'M4V ',
+  'M4A ',
+  'M4P ',
+  'f4v ',
+  'f4p ',
 ];
 
 const MOV_BRANDS = ['qt  ', 'qtvr'];
@@ -116,9 +130,15 @@ export function detectFormat(data: Uint8Array): SupportedFormat {
     if (data.length >= 16) {
       for (let i = 16; i + 4 <= Math.min(data.length, 128); i += 4) {
         const cb = buffer.toAscii(data, i, 4).toLowerCase().trim();
-        if (cb === 'avif' || cb === 'avis') return 'avif';
-        if (HEIC_BRANDS.includes(cb)) return 'heic';
-        if (MP4_BRANDS.includes(buffer.toAscii(data, i, 4))) return 'mp4';
+        if (cb === 'avif' || cb === 'avis') {
+          return 'avif';
+        }
+        if (HEIC_BRANDS.includes(cb)) {
+          return 'heic';
+        }
+        if (MP4_BRANDS.includes(buffer.toAscii(data, i, 4))) {
+          return 'mp4';
+        }
       }
     }
   }

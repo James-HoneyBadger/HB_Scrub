@@ -547,7 +547,9 @@ export function read(data: Uint8Array): Partial<MetadataMap> {
       const slice = data.slice(loc.offset, Math.min(loc.offset + loc.length, data.length));
       readExifBlock(slice, out);
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return out;
 }
 

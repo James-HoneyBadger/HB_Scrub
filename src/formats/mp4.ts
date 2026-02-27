@@ -28,23 +28,39 @@ import type { RemoveOptions, MetadataMap, GpsCoordinates } from '../types.js';
 
 /** Atom types whose entire content should be zeroed. */
 const ZERO_ATOM_TYPES = new Set([
-  '©xyz', '©geo', 'loci', // GPS
-  '©mak', '©mod',         // Camera make / model
-  '©cpy',                  // Copyright
-  '©swr',                  // Software
-  '©day',                  // Creation date
-  '©nam', '©des',          // Name / description
-  '©aut', '©enc',          // Author / encoder
-  '©inf', '©src',          // Information / source
-  '©dir', '©prd',          // Director / producer
-  '©wrt', '©edl',          // Writer / edit list info
-  'XMP_', 'uuid',          // XMP
+  '©xyz',
+  '©geo',
+  'loci', // GPS
+  '©mak',
+  '©mod', // Camera make / model
+  '©cpy', // Copyright
+  '©swr', // Software
+  '©day', // Creation date
+  '©nam',
+  '©des', // Name / description
+  '©aut',
+  '©enc', // Author / encoder
+  '©inf',
+  '©src', // Information / source
+  '©dir',
+  '©prd', // Director / producer
+  '©wrt',
+  '©edl', // Writer / edit list info
+  'XMP_',
+  'uuid', // XMP
 ]);
 
 /** Container atoms whose children should be recursed into. */
 const CONTAINER_ATOM_TYPES = new Set([
-  'moov', 'trak', 'mdia', 'minf', 'dinf', 'stbl',
-  'udta', 'meta', 'ilst',
+  'moov',
+  'trak',
+  'mdia',
+  'minf',
+  'dinf',
+  'stbl',
+  'udta',
+  'meta',
+  'ilst',
 ]);
 
 // ─── Atom parser ─────────────────────────────────────────────────────────────
@@ -60,9 +76,11 @@ interface Atom {
 
 function parseAtomHeader(
   data: Uint8Array,
-  offset: number,
+  offset: number
 ): { type: string; size: number; headerSize: number } | null {
-  if (offset + 8 > data.length) return null;
+  if (offset + 8 > data.length) {
+    return null;
+  }
 
   let size = dataview.readUint32BE(data, offset);
   const type = buffer.toAscii(data, offset + 4, 4);
@@ -70,7 +88,9 @@ function parseAtomHeader(
 
   if (size === 1) {
     // Extended 64-bit size
-    if (offset + 16 > data.length) return null;
+    if (offset + 16 > data.length) {
+      return null;
+    }
     const hi = dataview.readUint32BE(data, offset + 8);
     const lo = dataview.readUint32BE(data, offset + 12);
     size = hi * 0x100000000 + lo;
@@ -79,7 +99,9 @@ function parseAtomHeader(
     size = data.length - offset;
   }
 
-  if (size < headerSize) return null;
+  if (size < headerSize) {
+    return null;
+  }
   return { type, size, headerSize };
 }
 
@@ -90,7 +112,9 @@ function parseAtoms(data: Uint8Array, from: number, to: number): Atom[] {
   // 'meta' boxes start with a 4-byte version+flags header before child atoms
   while (offset < to) {
     const hdr = parseAtomHeader(data, offset);
-    if (!hdr || hdr.size === 0 || offset + hdr.size > to + 8) break;
+    if (!hdr || hdr.size === 0 || offset + hdr.size > to + 8) {
+      break;
+    }
 
     atoms.push({
       type: hdr.type,
@@ -118,9 +142,11 @@ function walkAtoms(
   from: number,
   to: number,
   visitor: (atom: Atom, data: Uint8Array) => void,
-  depth = 0,
+  depth = 0
 ): void {
-  if (depth > 10) return; // safeguard
+  if (depth > 10) {
+    return;
+  } // safeguard
 
   const atoms = parseAtoms(data, from, to);
   for (const atom of atoms) {
@@ -128,9 +154,7 @@ function walkAtoms(
 
     if (CONTAINER_ATOM_TYPES.has(atom.type)) {
       // 'meta' has a 4-byte version+flags before child atoms
-      const childStart = atom.type === 'meta'
-        ? atom.dataOffset + 4
-        : atom.dataOffset;
+      const childStart = atom.type === 'meta' ? atom.dataOffset + 4 : atom.dataOffset;
       walkAtoms(data, childStart, atom.dataOffset + atom.dataSize, visitor, depth + 1);
     }
   }
@@ -144,7 +168,9 @@ function walkAtoms(
  */
 function parseIso6709(text: string): GpsCoordinates | null {
   const m = /([+-]\d+\.?\d*)([+-]\d+\.?\d*)/.exec(text);
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   return {
     latitude: parseFloat(m[1]!),
     longitude: parseFloat(m[2]!),
@@ -159,7 +185,9 @@ function parseIso6709(text: string): GpsCoordinates | null {
  * version 1: 8-byte timestamps at bytes 4 and 12
  */
 function zeroMvhdTimestamps(result: Uint8Array, atom: Atom): void {
-  if (atom.dataSize < 4) return;
+  if (atom.dataSize < 4) {
+    return;
+  }
   const version = result[atom.dataOffset]!;
   if (version === 0 && atom.dataSize >= 12) {
     result.fill(0, atom.dataOffset + 4, atom.dataOffset + 12);
@@ -173,7 +201,7 @@ function zeroMvhdTimestamps(result: Uint8Array, atom: Atom): void {
 export function remove(data: Uint8Array, _options: RemoveOptions = {}): Uint8Array {
   const result = new Uint8Array(data);
 
-  walkAtoms(result, 0, data.length, (atom) => {
+  walkAtoms(result, 0, data.length, atom => {
     if (ZERO_ATOM_TYPES.has(atom.type)) {
       result.fill(0, atom.dataOffset, atom.dataOffset + atom.dataSize);
     }
@@ -188,7 +216,7 @@ export function remove(data: Uint8Array, _options: RemoveOptions = {}): Uint8Arr
 export function getMetadataTypes(data: Uint8Array): string[] {
   const types = new Set<string>();
 
-  walkAtoms(data, 0, data.length, (atom) => {
+  walkAtoms(data, 0, data.length, atom => {
     if (atom.type === '©xyz' || atom.type === 'loci' || atom.type === '©geo') {
       types.add('GPS');
     } else if (atom.type === '©mak' || atom.type === '©mod') {
@@ -209,7 +237,9 @@ export function getMetadataTypes(data: Uint8Array): string[] {
       const tsOffset = atom.dataOffset + 4;
       if (version === 0 && tsOffset + 8 <= data.length) {
         const ts = dataview.readUint32BE(data, tsOffset);
-        if (ts !== 0) types.add('Timestamps');
+        if (ts !== 0) {
+          types.add('Timestamps');
+        }
       }
     }
   });
@@ -220,35 +250,58 @@ export function getMetadataTypes(data: Uint8Array): string[] {
 export function read(data: Uint8Array): Partial<MetadataMap> {
   const out: Partial<MetadataMap> = {};
 
-  walkAtoms(data, 0, data.length, (atom) => {
+  walkAtoms(data, 0, data.length, atom => {
     // QuickTime string atoms: 16-byte header (flags + lang), then UTF-8 text
     const readQtString = (): string => {
-      if (atom.dataSize <= 16) return '';
+      if (atom.dataSize <= 16) {
+        return '';
+      }
       const offset = atom.dataOffset + 16;
       const len = atom.dataSize - 16;
       let s = '';
       for (let i = 0; i < len; i++) {
         const c = data[offset + i]!;
-        if (c === 0) break;
+        if (c === 0) {
+          break;
+        }
         s += String.fromCharCode(c);
       }
       return s.trim();
     };
 
     switch (atom.type) {
-      case '©xyz': case 'loci': {
+      case '©xyz':
+      case 'loci': {
         const text = readQtString();
         const gps = parseIso6709(text);
-        if (gps) out.gps = gps;
+        if (gps) {
+          out.gps = gps;
+        }
         break;
       }
-      case '©mak': out.make = readQtString(); break;
-      case '©mod': out.model = readQtString(); break;
-      case '©swr': case '©enc': out.software = readQtString(); break;
-      case '©cpy': out.copyright = readQtString(); break;
-      case '©day': out.dateTime = readQtString(); break;
-      case '©nam': case '©des': out.imageDescription = readQtString(); break;
-      case 'XMP_': out.hasXmp = true; break;
+      case '©mak':
+        out.make = readQtString();
+        break;
+      case '©mod':
+        out.model = readQtString();
+        break;
+      case '©swr':
+      case '©enc':
+        out.software = readQtString();
+        break;
+      case '©cpy':
+        out.copyright = readQtString();
+        break;
+      case '©day':
+        out.dateTime = readQtString();
+        break;
+      case '©nam':
+      case '©des':
+        out.imageDescription = readQtString();
+        break;
+      case 'XMP_':
+        out.hasXmp = true;
+        break;
     }
   });
 

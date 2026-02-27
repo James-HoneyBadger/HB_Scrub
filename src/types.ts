@@ -21,9 +21,9 @@ export type SupportedFormat =
  * GPS precision levels for redaction (truncation instead of full removal)
  */
 export type GpsRedactPrecision =
-  | 'exact'   // keep full precision — no change
-  | 'city'    // ±1 km  (~2 decimal degree places)
-  | 'region'  // ±11 km (~1 decimal degree place)
+  | 'exact' // keep full precision — no change
+  | 'city' // ±1 km  (~2 decimal degree places)
+  | 'region' // ±11 km (~1 decimal degree place)
   | 'country' // ±111 km (integer degree)
   | 'remove'; // strip GPS entirely (default)
 
@@ -48,7 +48,7 @@ export type MetadataFieldName =
   | 'Thumbnail'
   | 'Title'
   | 'Description'
-  | string;
+  | (string & {});
 
 /**
  * Fields to inject into the output after metadata removal

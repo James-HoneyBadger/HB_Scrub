@@ -462,7 +462,9 @@ export function read(data: Uint8Array): Partial<MetadataMap> {
         out.hasIptc = true;
       }
     }
-  } catch { /* ignore corrupt files */ }
+  } catch {
+    /* ignore corrupt files */
+  }
   return out;
 }
 

@@ -142,7 +142,9 @@ function zeroSubIfd(result: Uint8Array, ifdOffset: number, littleEndian: boolean
     // Zero non-inline value data referenced from each entry
     for (let i = 0; i < numEntries; i++) {
       const entryOffset = ifdOffset + 2 + i * 12;
-      if (entryOffset + 12 > result.length) break;
+      if (entryOffset + 12 > result.length) {
+        break;
+      }
 
       const type = dataview.readUint16(result, entryOffset + 2, littleEndian);
       const count = dataview.readUint32(result, entryOffset + 4, littleEndian);
@@ -152,13 +154,17 @@ function zeroSubIfd(result: Uint8Array, ifdOffset: number, littleEndian: boolean
       if (valueSize > 4) {
         const valueOffset = dataview.readUint32(result, entryOffset + 8, littleEndian);
         const end = Math.min(valueOffset + valueSize, result.length);
-        for (let j = valueOffset; j < end; j++) result[j] = 0;
+        for (let j = valueOffset; j < end; j++) {
+          result[j] = 0;
+        }
       }
     }
 
     // Zero the IFD structure itself (entries + next-IFD pointer)
     const ifdEnd = Math.min(ifdOffset + 2 + numEntries * 12 + 4, result.length);
-    for (let i = ifdOffset; i < ifdEnd; i++) result[i] = 0;
+    for (let i = ifdOffset; i < ifdEnd; i++) {
+      result[i] = 0;
+    }
   } catch {
     // Ignore errors for malformed sub-IFDs
   }
@@ -329,25 +335,57 @@ export function read(data: Uint8Array): Partial<MetadataMap> {
 
     const str = (tag: number) => {
       const e = entries.find(x => x.tag === tag);
-      if (!e) return undefined;
+      if (!e) {
+        return undefined;
+      }
       return readEntryValue(data, e, le) as string | undefined;
     };
     const num = (tag: number) => {
       const e = entries.find(x => x.tag === tag);
-      if (!e) return undefined;
+      if (!e) {
+        return undefined;
+      }
       return readEntryValue(data, e, le) as number | undefined;
     };
 
-    const make = str(271); if (make) out.make = make;
-    const model = str(272); if (model) out.model = model;
-    const software = str(305); if (software) out.software = software;
-    const desc = str(270); if (desc) out.imageDescription = desc;
-    const artist = str(315); if (artist) out.artist = artist;
-    const copy = str(33432); if (copy) out.copyright = copy;
-    const dt = str(306); if (dt) out.dateTime = dt;
-    const orient = num(274); if (orient !== undefined) out.orientation = orient;
-    if (entries.find(x => x.tag === 34675)) out.hasIcc = true;
-    if (entries.find(x => x.tag === 700)) out.hasXmp = true;
+    const make = str(271);
+    if (make) {
+      out.make = make;
+    }
+    const model = str(272);
+    if (model) {
+      out.model = model;
+    }
+    const software = str(305);
+    if (software) {
+      out.software = software;
+    }
+    const desc = str(270);
+    if (desc) {
+      out.imageDescription = desc;
+    }
+    const artist = str(315);
+    if (artist) {
+      out.artist = artist;
+    }
+    const copy = str(33432);
+    if (copy) {
+      out.copyright = copy;
+    }
+    const dt = str(306);
+    if (dt) {
+      out.dateTime = dt;
+    }
+    const orient = num(274);
+    if (orient !== undefined) {
+      out.orientation = orient;
+    }
+    if (entries.find(x => x.tag === 34675)) {
+      out.hasIcc = true;
+    }
+    if (entries.find(x => x.tag === 700)) {
+      out.hasXmp = true;
+    }
 
     const exifPtr = entries.find(x => x.tag === 34665);
     if (exifPtr && !isInlineValue(exifPtr)) {
@@ -356,9 +394,13 @@ export function read(data: Uint8Array): Partial<MetadataMap> {
     const gpsPtr = entries.find(x => x.tag === 34853);
     if (gpsPtr && !isInlineValue(gpsPtr)) {
       const gps = parseGpsIfd(data, gpsPtr.valueOffset, le);
-      if (gps) out.gps = gps;
+      if (gps) {
+        out.gps = gps;
+      }
     }
-  } catch { /* ignore corrupt files */ }
+  } catch {
+    /* ignore corrupt files */
+  }
   return out;
 }
 

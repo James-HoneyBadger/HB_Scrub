@@ -45,7 +45,7 @@ export class ScrubTransform extends Transform {
   override _transform(
     chunk: Buffer | Uint8Array | string,
     _encoding: BufferEncoding,
-    callback: (err?: Error | null) => void,
+    callback: (err?: Error | null) => void
   ): void {
     this._chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
     callback();
