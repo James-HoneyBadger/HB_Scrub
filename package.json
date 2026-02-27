@@ -46,6 +46,7 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
+    "gui": "npm run build && node dist/hb-scrub.gui.js",
     "prepublishOnly": "npm run build && npm run test && npm run lint"
   },
   "keywords": [
