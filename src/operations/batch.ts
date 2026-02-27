@@ -22,16 +22,38 @@
 import { readFile, writeFile, copyFile, mkdir, readdir, stat } from 'node:fs/promises';
 import { resolve, dirname, basename, extname, join } from 'node:path';
 import { removeMetadataSync } from './remove.js';
-import type { BatchOptions, BatchResult, AuditEntry, AuditReport, SupportedFormat } from '../types.js';
+import type {
+  BatchOptions,
+  BatchResult,
+  AuditEntry,
+  AuditReport,
+  SupportedFormat,
+} from '../types.js';
 import { detectFormat } from '../detect.js';
 
 // ─── Supported extensions ─────────────────────────────────────────────────────
 
 const SUPPORTED_EXTENSIONS = new Set([
-  '.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg',
-  '.tif', '.tiff', '.heic', '.heif', '.avif',
-  '.dng', '.raw', '.cr2', '.nef', '.arw',
-  '.pdf', '.mp4', '.mov', '.m4v',
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+  '.gif',
+  '.svg',
+  '.tif',
+  '.tiff',
+  '.heic',
+  '.heif',
+  '.avif',
+  '.dng',
+  '.raw',
+  '.cr2',
+  '.nef',
+  '.arw',
+  '.pdf',
+  '.mp4',
+  '.mov',
+  '.m4v',
 ]);
 
 // ─── File collection ──────────────────────────────────────────────────────────
@@ -43,7 +65,7 @@ async function collectFiles(
   dir: string,
   recursive: boolean,
   include: string[] | undefined,
-  exclude: string[] | undefined,
+  exclude: string[] | undefined
 ): Promise<string[]> {
   const results: string[] = [];
   const entries = await readdir(dir, { withFileTypes: true });
@@ -58,9 +80,15 @@ async function collectFiles(
       }
     } else if (entry.isFile()) {
       const ext = extname(entry.name).toLowerCase();
-      if (!SUPPORTED_EXTENSIONS.has(ext)) continue;
-      if (exclude?.some(p => matchGlob(entry.name, p))) continue;
-      if (include && include.length > 0 && !include.some(p => matchGlob(entry.name, p))) continue;
+      if (!SUPPORTED_EXTENSIONS.has(ext)) {
+        continue;
+      }
+      if (exclude?.some(p => matchGlob(entry.name, p))) {
+        continue;
+      }
+      if (include && include.length > 0 && !include.some(p => matchGlob(entry.name, p))) {
+        continue;
+      }
       results.push(fullPath);
     }
   }
@@ -73,8 +101,13 @@ async function collectFiles(
  */
 function matchGlob(filename: string, pattern: string): boolean {
   const regex = new RegExp(
-    '^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$',
-    'i',
+    '^' +
+      pattern
+        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*/g, '.*')
+        .replace(/\?/g, '.') +
+      '$',
+    'i'
   );
   return regex.test(filename);
 }
@@ -84,9 +117,11 @@ function matchGlob(filename: string, pattern: string): boolean {
 function computeOutputPath(
   inputPath: string,
   options: BatchOptions,
-  outputFormat?: SupportedFormat,
+  outputFormat?: SupportedFormat
 ): string {
-  if (options.inPlace) return inputPath;
+  if (options.inPlace) {
+    return inputPath;
+  }
 
   const dir = options.outputDir ? resolve(options.outputDir) : dirname(inputPath);
   const ext = extname(inputPath);
@@ -102,10 +137,7 @@ function computeOutputPath(
 
 // ─── Single-file processor ────────────────────────────────────────────────────
 
-async function processSingleFile(
-  inputPath: string,
-  options: BatchOptions,
-): Promise<AuditEntry> {
+async function processSingleFile(inputPath: string, options: BatchOptions): Promise<AuditEntry> {
   const entry: AuditEntry = {
     file: inputPath,
     success: false,
@@ -141,7 +173,9 @@ async function processSingleFile(
         await stat(outputPath);
         entry.success = true; // skip
         return entry;
-      } catch { /* doesn't exist, continue */ }
+      } catch {
+        /* doesn't exist, continue */
+      }
     }
 
     if (options.backupSuffix && options.inPlace) {
@@ -165,7 +199,7 @@ async function processSingleFile(
 async function runConcurrent<T>(
   items: T[],
   concurrency: number,
-  fn: (item: T) => Promise<AuditEntry>,
+  fn: (item: T) => Promise<AuditEntry>
 ): Promise<AuditEntry[]> {
   const results: AuditEntry[] = [];
   const queue = [...items];
@@ -198,7 +232,7 @@ async function runConcurrent<T>(
 export async function processDir(
   dirPath: string,
   options: BatchOptions = {},
-  recursive = true,
+  recursive = true
 ): Promise<BatchResult> {
   const absDir = resolve(dirPath);
   const files = await collectFiles(absDir, recursive, options.include, options.exclude);
@@ -216,13 +250,13 @@ export async function processDir(
  */
 export async function processFiles(
   filePaths: string[],
-  options: BatchOptions = {},
+  options: BatchOptions = {}
 ): Promise<BatchResult> {
   const concurrency = Math.max(1, options.concurrency ?? 4);
   const entries = await runConcurrent(
     filePaths.map(f => resolve(f)),
     concurrency,
-    file => processSingleFile(file, options),
+    file => processSingleFile(file, options)
   );
 
   const successful = entries.filter(e => e.success);

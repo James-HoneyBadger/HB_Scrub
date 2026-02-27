@@ -36,8 +36,19 @@ import { raw } from '../formats/raw.js';
 import { pdf } from '../formats/pdf.js';
 import { mp4 } from '../formats/mp4.js';
 
-const checkers: Partial<Record<SupportedFormat, { getMetadataTypes: (d: Uint8Array) => string[] }>> = {
-  jpeg, png, webp, gif, svg, tiff, heic, avif, pdf, mp4,
+const checkers: Partial<
+  Record<SupportedFormat, { getMetadataTypes: (d: Uint8Array) => string[] }>
+> = {
+  jpeg,
+  png,
+  webp,
+  gif,
+  svg,
+  tiff,
+  heic,
+  avif,
+  pdf,
+  mp4,
   dng: raw,
   raw,
   mov: mp4,
@@ -66,7 +77,7 @@ export function verifyCleanSync(input: Uint8Array | ArrayBuffer | string): Verif
  * Async version of verifyClean.
  */
 export async function verifyClean(
-  input: Uint8Array | ArrayBuffer | string | Blob,
+  input: Uint8Array | ArrayBuffer | string | Blob
 ): Promise<VerifyResult> {
   let data: Uint8Array | ArrayBuffer | string;
   if (typeof Blob !== 'undefined' && input instanceof Blob) {

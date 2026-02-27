@@ -43,8 +43,12 @@ function getVersion(): string {
 }
 
 function formatSize(bytes: number): string {
-  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
-  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(1)} KB`;
+  if (bytes >= 1_000_000) {
+    return `${(bytes / 1_000_000).toFixed(1)} MB`;
+  }
+  if (bytes >= 1_000) {
+    return `${(bytes / 1_000).toFixed(1)} KB`;
+  }
   return `${bytes} B`;
 }
 
@@ -54,27 +58,60 @@ function formatMetadata(result: ReadResult): string {
 
   lines.push(`  Format    : ${result.format}`);
   lines.push(`  File size : ${formatSize(result.fileSize)}`);
-  if (m.make)             lines.push(`  Make      : ${m.make}`);
-  if (m.model)            lines.push(`  Model     : ${m.model}`);
-  if (m.software)         lines.push(`  Software  : ${m.software}`);
-  if (m.dateTime)         lines.push(`  DateTime  : ${m.dateTime}`);
-  if (m.artist)           lines.push(`  Artist    : ${m.artist}`);
-  if (m.copyright)        lines.push(`  Copyright : ${m.copyright}`);
-  if (m.imageDescription) lines.push(`  Desc      : ${m.imageDescription}`);
-  if (m.orientation)      lines.push(`  Orient.   : ${m.orientation}`);
+  if (m.make) {
+    lines.push(`  Make      : ${m.make}`);
+  }
+  if (m.model) {
+    lines.push(`  Model     : ${m.model}`);
+  }
+  if (m.software) {
+    lines.push(`  Software  : ${m.software}`);
+  }
+  if (m.dateTime) {
+    lines.push(`  DateTime  : ${m.dateTime}`);
+  }
+  if (m.artist) {
+    lines.push(`  Artist    : ${m.artist}`);
+  }
+  if (m.copyright) {
+    lines.push(`  Copyright : ${m.copyright}`);
+  }
+  if (m.imageDescription) {
+    lines.push(`  Desc      : ${m.imageDescription}`);
+  }
+  if (m.orientation) {
+    lines.push(`  Orient.   : ${m.orientation}`);
+  }
   if (m.gps) {
     lines.push(`  GPS       : ${m.gps.latitude.toFixed(6)}, ${m.gps.longitude.toFixed(6)}`);
-    if (m.gps.altitude !== undefined)
+    if (m.gps.altitude !== undefined) {
       lines.push(`  Altitude  : ${m.gps.altitude.toFixed(1)} m`);
+    }
   }
-  if (m.exif?.dateTimeOriginal) lines.push(`  Captured  : ${m.exif.dateTimeOriginal}`);
-  if (m.exif?.fNumber)          lines.push(`  f/        : ${m.exif.fNumber}`);
-  if (m.exif?.iso)              lines.push(`  ISO       : ${m.exif.iso}`);
-  if (m.exif?.focalLength)      lines.push(`  Focal     : ${m.exif.focalLength} mm`);
-  if (m.hasXmp)                 lines.push(`  XMP       : yes`);
-  if (m.hasIcc)                 lines.push(`  ICC       : yes`);
-  if (m.hasIptc)                lines.push(`  IPTC      : yes`);
-  if (m.hasThumbnail)           lines.push(`  Thumbnail : yes`);
+  if (m.exif?.dateTimeOriginal) {
+    lines.push(`  Captured  : ${m.exif.dateTimeOriginal}`);
+  }
+  if (m.exif?.fNumber) {
+    lines.push(`  f/        : ${m.exif.fNumber}`);
+  }
+  if (m.exif?.iso) {
+    lines.push(`  ISO       : ${m.exif.iso}`);
+  }
+  if (m.exif?.focalLength) {
+    lines.push(`  Focal     : ${m.exif.focalLength} mm`);
+  }
+  if (m.hasXmp) {
+    lines.push(`  XMP       : yes`);
+  }
+  if (m.hasIcc) {
+    lines.push(`  ICC       : yes`);
+  }
+  if (m.hasIptc) {
+    lines.push(`  IPTC      : yes`);
+  }
+  if (m.hasThumbnail) {
+    lines.push(`  Thumbnail : yes`);
+  }
 
   return lines.join('\n');
 }
@@ -187,24 +224,54 @@ function parseArgs(raw: string[]): CliArgs {
   for (let i = 0; i < raw.length; i++) {
     const a = raw[i]!;
     switch (a) {
-      case '-i': case '--in-place':             args.inPlace = true; break;
-      case '-r': case '--recursive':            args.recursive = true; break;
-      case '-q': case '--quiet':                args.quiet = true; break;
-      case '--inspect':                         args.inspect = true; break;
-      case '--preserve-orientation':            args.preserveOrientation = true; break;
-      case '--preserve-color-profile':          args.preserveColorProfile = true; break;
-      case '--preserve-copyright':              args.preserveCopyright = true; break;
-      case '--dry-run':                         args.dryRun = true; break;
-      case '--skip-existing':                   args.skipExisting = true; break;
+      case '-i':
+      case '--in-place':
+        args.inPlace = true;
+        break;
+      case '-r':
+      case '--recursive':
+        args.recursive = true;
+        break;
+      case '-q':
+      case '--quiet':
+        args.quiet = true;
+        break;
+      case '--inspect':
+        args.inspect = true;
+        break;
+      case '--preserve-orientation':
+        args.preserveOrientation = true;
+        break;
+      case '--preserve-color-profile':
+        args.preserveColorProfile = true;
+        break;
+      case '--preserve-copyright':
+        args.preserveCopyright = true;
+        break;
+      case '--dry-run':
+        args.dryRun = true;
+        break;
+      case '--skip-existing':
+        args.skipExisting = true;
+        break;
 
-      case '-o': case '--output': {
-        const [ni, v] = take(i, a, raw); i = ni; args.outputPath = v; break;
+      case '-o':
+      case '--output': {
+        const [ni, v] = take(i, a, raw);
+        i = ni;
+        args.outputPath = v;
+        break;
       }
-      case '-s': case '--suffix': {
-        const [ni, v] = take(i, a, raw); i = ni; args.suffix = v; break;
+      case '-s':
+      case '--suffix': {
+        const [ni, v] = take(i, a, raw);
+        i = ni;
+        args.suffix = v;
+        break;
       }
       case '--gps-redact': {
-        const [ni, v] = take(i, a, raw); i = ni;
+        const [ni, v] = take(i, a, raw);
+        i = ni;
         const allowed = ['exact', 'city', 'region', 'country', 'remove'];
         if (!allowed.includes(v)) {
           console.error(`Error: --gps-redact must be one of: ${allowed.join(', ')}`);
@@ -214,26 +281,38 @@ function parseArgs(raw: string[]): CliArgs {
         break;
       }
       case '--remove': {
-        const [ni, v] = take(i, a, raw); i = ni;
-        args.remove = v.split(',').map(s => s.trim()) as MetadataFieldName[];
+        const [ni, v] = take(i, a, raw);
+        i = ni;
+        args.remove = v.split(',').map(s => s.trim());
         break;
       }
       case '--keep': {
-        const [ni, v] = take(i, a, raw); i = ni;
-        args.keep = v.split(',').map(s => s.trim()) as MetadataFieldName[];
+        const [ni, v] = take(i, a, raw);
+        i = ni;
+        args.keep = v.split(',').map(s => s.trim());
         break;
       }
       case '--inject-copyright': {
-        const [ni, v] = take(i, a, raw); i = ni; args.injectCopyright = v; break;
+        const [ni, v] = take(i, a, raw);
+        i = ni;
+        args.injectCopyright = v;
+        break;
       }
       case '--inject-software': {
-        const [ni, v] = take(i, a, raw); i = ni; args.injectSoftware = v; break;
+        const [ni, v] = take(i, a, raw);
+        i = ni;
+        args.injectSoftware = v;
+        break;
       }
       case '--inject-artist': {
-        const [ni, v] = take(i, a, raw); i = ni; args.injectArtist = v; break;
+        const [ni, v] = take(i, a, raw);
+        i = ni;
+        args.injectArtist = v;
+        break;
       }
       case '--concurrency': {
-        const [ni, v] = take(i, a, raw); i = ni;
+        const [ni, v] = take(i, a, raw);
+        i = ni;
         const n = parseInt(v, 10);
         if (isNaN(n) || n < 1) {
           console.error('Error: --concurrency must be a positive integer');
@@ -243,13 +322,22 @@ function parseArgs(raw: string[]): CliArgs {
         break;
       }
       case '--backup': {
-        const [ni, v] = take(i, a, raw); i = ni; args.backup = v; break;
+        const [ni, v] = take(i, a, raw);
+        i = ni;
+        args.backup = v;
+        break;
       }
       case '--report': {
-        const [ni, v] = take(i, a, raw); i = ni; args.report = v; break;
+        const [ni, v] = take(i, a, raw);
+        i = ni;
+        args.report = v;
+        break;
       }
       case '--watch': {
-        const [ni, v] = take(i, a, raw); i = ni; args.watchDir = v; break;
+        const [ni, v] = take(i, a, raw);
+        i = ni;
+        args.watchDir = v;
+        break;
       }
       default:
         if (a.startsWith('-')) {
@@ -280,19 +368,30 @@ async function processStdin(opts: ProcessFileOptions): Promise<void> {
 
 function startWatch(dirPath: string, batchOpts: BatchOptions, quiet: boolean): void {
   const abs = resolve(dirPath);
-  if (!quiet) console.log(`Watching ${abs} for new files…`);
+  if (!quiet) {
+    console.log(`Watching ${abs} for new files…`);
+  }
 
   watch(abs, { recursive: true }, (_event, filename) => {
-    if (!filename) return;
+    if (!filename) {
+      return;
+    }
     const fullPath = join(abs, filename);
 
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
     setTimeout(async () => {
       try {
         const s = await stat(fullPath);
-        if (!s.isFile()) return;
+        if (!s.isFile()) {
+          return;
+        }
         await processFile(fullPath, { ...batchOpts });
-        if (!quiet) console.log(`  ✓ ${basename(filename)}`);
-      } catch { /* file may be transient */ }
+        if (!quiet) {
+          console.log(`  ✓ ${basename(filename)}`);
+        }
+      } catch {
+        /* file may be transient */
+      }
     }, 200);
   });
 }
@@ -304,11 +403,17 @@ async function classifyInputs(inputs: string[]): Promise<{ files: string[]; dirs
   const dirs: string[] = [];
 
   for (const p of inputs) {
-    if (p === '-') { files.push(p); continue; }
+    if (p === '-') {
+      files.push(p);
+      continue;
+    }
     try {
       const s = await stat(resolve(p));
-      if (s.isDirectory()) dirs.push(resolve(p));
-      else files.push(resolve(p));
+      if (s.isDirectory()) {
+        dirs.push(resolve(p));
+      } else {
+        files.push(resolve(p));
+      }
     } catch {
       console.error(`Warning: cannot access ${p}`);
     }
@@ -328,18 +433,22 @@ function buildOptions(a: CliArgs): ProcessFileOptions & BatchOptions {
     concurrency: a.concurrency,
     dryRun: a.dryRun,
     skipExisting: a.skipExisting,
-    ...(a.suffix !== undefined     && { suffix: a.suffix }),
-    ...(a.remove !== undefined     && { remove: a.remove }),
-    ...(a.keep !== undefined       && { keep: a.keep }),
-    ...(a.gpsRedact !== undefined  && { gpsRedact: a.gpsRedact }),
-    ...(a.backup !== undefined     && { backupSuffix: a.backup }),
+    ...(a.suffix !== undefined && { suffix: a.suffix }),
+    ...(a.remove !== undefined && { remove: a.remove }),
+    ...(a.keep !== undefined && { keep: a.keep }),
+    ...(a.gpsRedact !== undefined && { gpsRedact: a.gpsRedact }),
+    ...(a.backup !== undefined && { backupSuffix: a.backup }),
   };
 
-  if (a.injectCopyright !== undefined || a.injectSoftware !== undefined || a.injectArtist !== undefined) {
+  if (
+    a.injectCopyright !== undefined ||
+    a.injectSoftware !== undefined ||
+    a.injectArtist !== undefined
+  ) {
     opts.inject = {
       ...(a.injectCopyright !== undefined && { copyright: a.injectCopyright }),
-      ...(a.injectSoftware !== undefined  && { software: a.injectSoftware }),
-      ...(a.injectArtist !== undefined    && { artist: a.injectArtist }),
+      ...(a.injectSoftware !== undefined && { software: a.injectSoftware }),
+      ...(a.injectArtist !== undefined && { artist: a.injectArtist }),
     };
   }
 
@@ -403,7 +512,9 @@ async function main(): Promise<void> {
         hasError = true;
       }
     }
-    if (hasError) process.exit(1);
+    if (hasError) {
+      process.exit(1);
+    }
     return;
   }
 
@@ -438,7 +549,9 @@ async function main(): Promise<void> {
   for (const f of files) {
     try {
       const opts: ProcessFileOptions = { ...baseOpts };
-      if (a.outputPath) opts.outputPath = a.outputPath;
+      if (a.outputPath) {
+        opts.outputPath = a.outputPath;
+      }
 
       if (a.dryRun) {
         const data = new Uint8Array(await readFile(f));
@@ -458,9 +571,10 @@ async function main(): Promise<void> {
       const result = await processFile(f, opts);
 
       if (!a.quiet) {
-        const metaDesc = result.removedMetadata.length > 0
-          ? `removed ${result.removedMetadata.join(', ')}`
-          : 'no metadata found';
+        const metaDesc =
+          result.removedMetadata.length > 0
+            ? `removed ${result.removedMetadata.join(', ')}`
+            : 'no metadata found';
         const sizeDesc = `${formatSize(result.originalSize)} → ${formatSize(result.cleanedSize)}`;
         console.log(`  ✓ ${f} → ${result.outputPath} (${metaDesc} | ${sizeDesc})`);
       }
@@ -474,21 +588,25 @@ async function main(): Promise<void> {
   if (a.report && allReports.length > 0) {
     const combined: AuditReport = {
       timestamp: new Date().toISOString(),
-      totalFiles:         allReports.reduce((s, r) => s + r.totalFiles, 0),
-      successful:         allReports.reduce((s, r) => s + r.successful, 0),
-      failed:             allReports.reduce((s, r) => s + r.failed, 0),
-      skipped:            allReports.reduce((s, r) => s + r.skipped, 0),
+      totalFiles: allReports.reduce((s, r) => s + r.totalFiles, 0),
+      successful: allReports.reduce((s, r) => s + r.successful, 0),
+      failed: allReports.reduce((s, r) => s + r.failed, 0),
+      skipped: allReports.reduce((s, r) => s + r.skipped, 0),
       totalOriginalBytes: allReports.reduce((s, r) => s + r.totalOriginalBytes, 0),
-      totalCleanedBytes:  allReports.reduce((s, r) => s + r.totalCleanedBytes, 0),
-      totalBytesRemoved:  allReports.reduce((s, r) => s + r.totalBytesRemoved, 0),
-      entries:            allReports.flatMap(r => r.entries),
+      totalCleanedBytes: allReports.reduce((s, r) => s + r.totalCleanedBytes, 0),
+      totalBytesRemoved: allReports.reduce((s, r) => s + r.totalBytesRemoved, 0),
+      entries: allReports.flatMap(r => r.entries),
     };
     await mkdir(dirname(resolve(a.report)), { recursive: true });
     await writeFile(a.report, JSON.stringify(combined, null, 2));
-    if (!a.quiet) console.log(`\n  Report written to ${a.report}`);
+    if (!a.quiet) {
+      console.log(`\n  Report written to ${a.report}`);
+    }
   }
 
-  if (hasError) process.exit(1);
+  if (hasError) {
+    process.exit(1);
+  }
 }
 
 // ─── Entry ────────────────────────────────────────────────────────────────────

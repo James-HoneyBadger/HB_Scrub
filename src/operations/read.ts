@@ -82,7 +82,7 @@ export function readMetadataSync(input: Uint8Array | ArrayBuffer | string): Read
  * Inspect the metadata in an image/document asynchronously.
  */
 export async function readMetadata(
-  input: Uint8Array | ArrayBuffer | string | Blob,
+  input: Uint8Array | ArrayBuffer | string | Blob
 ): Promise<ReadResult> {
   let data: Uint8Array | ArrayBuffer | string;
   if (typeof Blob !== 'undefined' && input instanceof Blob) {

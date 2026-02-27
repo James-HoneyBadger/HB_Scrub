@@ -15,10 +15,10 @@ import type { GpsRedactPrecision } from '../types.js';
 /** Number of decimal degree places kept at each precision level */
 const PRECISION_DECIMALS: Record<GpsRedactPrecision, number> = {
   exact: 10,
-  city: 2,      // ±1.1 km
-  region: 1,    // ±11 km
-  country: 0,   // ±111 km
-  remove: -1,   // not used in this path
+  city: 2, // ±1.1 km
+  region: 1, // ±11 km
+  country: 0, // ±111 km
+  remove: -1, // not used in this path
 };
 
 // ─── DMS ↔ decimal ───────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ export function writeRedactedDms(
   offset: number,
   decimalDegrees: number,
   decimals: number,
-  le: boolean,
+  le: boolean
 ): void {
   const factor = Math.pow(10, decimals);
   const truncated = Math.floor(Math.abs(decimalDegrees) * factor) / factor;
@@ -77,30 +77,44 @@ export function redactGpsInExif(
   exifData: Uint8Array,
   gpsIfdOffset: number,
   precision: GpsRedactPrecision,
-  le: boolean,
+  le: boolean
 ): void {
-  if (precision === 'exact' || precision === 'remove') return;
+  if (precision === 'exact' || precision === 'remove') {
+    return;
+  }
   const decimals = PRECISION_DECIMALS[precision];
 
   try {
-    if (gpsIfdOffset + 2 > exifData.length) return;
+    if (gpsIfdOffset + 2 > exifData.length) {
+      return;
+    }
     const numEntries = dataview.readUint16(exifData, gpsIfdOffset, le);
-    if (numEntries > 64) return;
+    if (numEntries > 64) {
+      return;
+    }
 
     for (let i = 0; i < numEntries; i++) {
       const entryOffset = gpsIfdOffset + 2 + i * 12;
-      if (entryOffset + 12 > exifData.length) break;
+      if (entryOffset + 12 > exifData.length) {
+        break;
+      }
 
       const tag = dataview.readUint16(exifData, entryOffset, le);
       // GPSLatitude (2) | GPSLongitude (4): type RATIONAL(5), count 3
-      if (tag !== 2 && tag !== 4) continue;
+      if (tag !== 2 && tag !== 4) {
+        continue;
+      }
 
       const type = dataview.readUint16(exifData, entryOffset + 2, le);
       const count = dataview.readUint32(exifData, entryOffset + 4, le);
-      if (type !== 5 || count !== 3) continue;
+      if (type !== 5 || count !== 3) {
+        continue;
+      }
 
       const valueOffset = dataview.readUint32(exifData, entryOffset + 8, le);
-      if (valueOffset + 24 > exifData.length) continue;
+      if (valueOffset + 24 > exifData.length) {
+        continue;
+      }
 
       const decimal = dmsRawToDecimal(exifData, valueOffset, le);
       writeRedactedDms(exifData, valueOffset, decimal, decimals, le);
@@ -113,23 +127,27 @@ export function redactGpsInExif(
 /**
  * Locate the GPS sub-IFD pointer in IFD0 and return its offset, or 0.
  */
-export function findGpsIfdOffset(
-  exifData: Uint8Array,
-  ifd0Offset: number,
-  le: boolean,
-): number {
+export function findGpsIfdOffset(exifData: Uint8Array, ifd0Offset: number, le: boolean): number {
   try {
-    if (ifd0Offset + 2 > exifData.length) return 0;
+    if (ifd0Offset + 2 > exifData.length) {
+      return 0;
+    }
     const numEntries = dataview.readUint16(exifData, ifd0Offset, le);
-    if (numEntries > 512) return 0;
+    if (numEntries > 512) {
+      return 0;
+    }
     for (let i = 0; i < numEntries; i++) {
       const pos = ifd0Offset + 2 + i * 12;
-      if (pos + 12 > exifData.length) break;
+      if (pos + 12 > exifData.length) {
+        break;
+      }
       const tag = dataview.readUint16(exifData, pos, le);
       if (tag === 34853 /* GPSInfoIFDPointer */) {
         return dataview.readUint32(exifData, pos + 8, le);
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return 0;
 }

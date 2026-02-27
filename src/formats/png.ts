@@ -149,16 +149,22 @@ function buildPng(chunks: PngChunk[]): Uint8Array {
  * PNG eXIf chunks contain a raw TIFF-formatted EXIF block (II/MM header).
  */
 function readOrientationFromRawExif(exifData: Uint8Array): number | null {
-  if (exifData.length < 8) return null;
+  if (exifData.length < 8) {
+    return null;
+  }
   try {
     const byteOrder = buffer.toAscii(exifData, 0, 2);
     const littleEndian = byteOrder === 'II';
     const ifdOffset = dataview.readUint32(exifData, 4, littleEndian);
-    if (ifdOffset + 2 > exifData.length) return null;
+    if (ifdOffset + 2 > exifData.length) {
+      return null;
+    }
     const numEntries = dataview.readUint16(exifData, ifdOffset, littleEndian);
     for (let i = 0; i < numEntries; i++) {
       const entryOffset = ifdOffset + 2 + i * 12;
-      if (entryOffset + 12 > exifData.length) break;
+      if (entryOffset + 12 > exifData.length) {
+        break;
+      }
       const tag = dataview.readUint16(exifData, entryOffset, littleEndian);
       if (tag === 0x0112 /* Orientation */) {
         return dataview.readUint16(exifData, entryOffset + 8, littleEndian);
@@ -177,18 +183,35 @@ function buildOrientationExifChunk(orientation: number): PngChunk {
   // 8-byte TIFF header + 2-byte count + 12-byte entry + 4-byte next-IFD = 26 bytes
   const data = new Uint8Array(26);
   // TIFF header: big-endian, magic 0x002A, IFD0 at offset 8
-  data[0] = 0x4d; data[1] = 0x4d;           // 'MM' = big-endian
-  data[2] = 0x00; data[3] = 0x2a;           // TIFF magic
-  data[4] = 0x00; data[5] = 0x00; data[6] = 0x00; data[7] = 0x08; // IFD offset
+  data[0] = 0x4d;
+  data[1] = 0x4d; // 'MM' = big-endian
+  data[2] = 0x00;
+  data[3] = 0x2a; // TIFF magic
+  data[4] = 0x00;
+  data[5] = 0x00;
+  data[6] = 0x00;
+  data[7] = 0x08; // IFD offset
   // IFD: 1 entry
-  data[8] = 0x00; data[9] = 0x01;           // numEntries = 1
+  data[8] = 0x00;
+  data[9] = 0x01; // numEntries = 1
   // Entry: tag=0x0112, type=SHORT(3), count=1, value=orientation
-  data[10] = 0x01; data[11] = 0x12;         // tag
-  data[12] = 0x00; data[13] = 0x03;         // type SHORT
-  data[14] = 0x00; data[15] = 0x00; data[16] = 0x00; data[17] = 0x01; // count
-  data[18] = 0x00; data[19] = orientation & 0xff; data[20] = 0x00; data[21] = 0x00; // value
+  data[10] = 0x01;
+  data[11] = 0x12; // tag
+  data[12] = 0x00;
+  data[13] = 0x03; // type SHORT
+  data[14] = 0x00;
+  data[15] = 0x00;
+  data[16] = 0x00;
+  data[17] = 0x01; // count
+  data[18] = 0x00;
+  data[19] = orientation & 0xff;
+  data[20] = 0x00;
+  data[21] = 0x00; // value
   // next IFD pointer = 0
-  data[22] = 0x00; data[23] = 0x00; data[24] = 0x00; data[25] = 0x00;
+  data[22] = 0x00;
+  data[23] = 0x00;
+  data[24] = 0x00;
+  data[25] = 0x00;
   return { type: 'eXIf', data, crc: 0 };
 }
 
@@ -306,12 +329,16 @@ export function read(data: Uint8Array): Partial<MetadataMap> {
       } else if (chunk.type === 'iTXt' || chunk.type === 'tEXt' || chunk.type === 'zTXt') {
         // Check for XMP in iTXt
         const text = String.fromCharCode(...chunk.data.slice(0, Math.min(40, chunk.data.length)));
-        if (text.includes('XML:com.adobe.xmp') || text.includes('xpacket')) out.hasXmp = true;
+        if (text.includes('XML:com.adobe.xmp') || text.includes('xpacket')) {
+          out.hasXmp = true;
+        }
       } else if (chunk.type === 'iCCP') {
         out.hasIcc = true;
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return out;
 }
 

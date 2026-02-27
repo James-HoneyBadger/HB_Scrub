@@ -6,7 +6,12 @@
 
 import * as http from 'node:http';
 import * as url from 'node:url';
-import { removeMetadataSync, readMetadataSync, getMetadataTypes, getSupportedFormats } from './index.js';
+import {
+  removeMetadataSync,
+  readMetadataSync,
+  getMetadataTypes,
+  getSupportedFormats,
+} from './index.js';
 
 const PORT = 3777;
 
@@ -474,7 +479,7 @@ const HTML = `<!DOCTYPE html>
 
 // ─── HTTP Server ─────────────────────────────────────────────────────────────
 
-async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   const parsedUrl = url.parse(req.url ?? '/');
   const pathname = parsedUrl.pathname ?? '/';
 
@@ -496,8 +501,10 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
   // ── POST helpers ─────────────────────────────────────────────────────────
   if (req.method === 'POST' && (pathname === '/api/process' || pathname === '/api/read')) {
     let body = '';
-    req.on('data', chunk => { body += chunk.toString(); });
-    req.on('end', async () => {
+    req.on('data', (chunk: Buffer) => {
+      body += chunk.toString();
+    });
+    req.on('end', () => {
       try {
         const { name, data, options } = JSON.parse(body) as {
           name: string;
@@ -512,10 +519,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           const result = readMetadataSync(bytes);
           const metadataTypes = getMetadataTypes(bytes);
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            format: result.format,
-            metadataTypes,
-          }));
+          res.end(
+            JSON.stringify({
+              format: result.format,
+              metadataTypes,
+            })
+          );
           return;
         }
 
@@ -523,12 +532,14 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         const result = removeMetadataSync(bytes, options ?? {});
         const outName = buildOutputName(name);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          name: outName,
-          format: result.format,
-          removed: result.removedMetadata,
-          data: Buffer.from(result.data).toString('base64'),
-        }));
+        res.end(
+          JSON.stringify({
+            name: outName,
+            format: result.format,
+            removed: result.removedMetadata,
+            data: Buffer.from(result.data).toString('base64'),
+          })
+        );
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -545,7 +556,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
 function buildOutputName(original: string): string {
   const dot = original.lastIndexOf('.');
-  if (dot === -1) return original + '_clean';
+  if (dot === -1) {
+    return original + '_clean';
+  }
   return original.slice(0, dot) + '_clean' + original.slice(dot);
 }
 

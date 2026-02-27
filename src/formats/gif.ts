@@ -374,8 +374,12 @@ export function read(data: Uint8Array): Partial<MetadataMap> {
   const out: Partial<MetadataMap> = {};
   try {
     const blocks = parseBlocks(data);
-    if (blocks.some(b => isXmpExtension(b))) out.hasXmp = true;
-  } catch { /* ignore */ }
+    if (blocks.some(b => isXmpExtension(b))) {
+      out.hasXmp = true;
+    }
+  } catch {
+    /* ignore */
+  }
   return out;
 }
 

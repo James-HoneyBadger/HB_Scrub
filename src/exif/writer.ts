@@ -30,7 +30,9 @@ interface FieldDef {
  *   offset 8 : IFD0 …
  */
 export function buildTiffBlock(fields: FieldDef[]): Uint8Array {
-  if (fields.length === 0) return new Uint8Array(0);
+  if (fields.length === 0) {
+    return new Uint8Array(0);
+  }
 
   // Sort by tag for conformance
   const sorted = [...fields].sort((a, b) => a.tag - b.tag);
@@ -43,7 +45,7 @@ export function buildTiffBlock(fields: FieldDef[]): Uint8Array {
   });
 
   // Size planning
-  const headerSize = 8;          // byte-order (2) + magic (2) + ifd0-offset (4)
+  const headerSize = 8; // byte-order (2) + magic (2) + ifd0-offset (4)
   const ifdCountSize = 2;
   const ifdEntrySize = 12;
   const ifdNextSize = 4;
@@ -54,20 +56,26 @@ export function buildTiffBlock(fields: FieldDef[]): Uint8Array {
   const out = new Uint8Array(totalSize);
 
   // Header (big-endian = MM)
-  out[0] = 0x4d; out[1] = 0x4d; // 'MM'
-  out[2] = 0x00; out[3] = 0x2a; // TIFF magic
+  out[0] = 0x4d;
+  out[1] = 0x4d; // 'MM'
+  out[2] = 0x00;
+  out[3] = 0x2a; // TIFF magic
   dataview.writeUint32BE(out, 4, headerSize); // IFD0 at offset 8
 
   // IFD0
   let pos = headerSize;
-  dataview.writeUint16BE(out, pos, sorted.length); pos += 2;
+  dataview.writeUint16BE(out, pos, sorted.length);
+  pos += 2;
 
   let valueOffset = valuesStart;
   for (const [i, f] of sorted.entries()) {
     const blob = valueBlobs[i]!;
-    dataview.writeUint16BE(out, pos, f.tag);    pos += 2; // tag
-    dataview.writeUint16BE(out, pos, 2);         pos += 2; // type = ASCII
-    dataview.writeUint32BE(out, pos, blob.length); pos += 4; // count (includes NUL)
+    dataview.writeUint16BE(out, pos, f.tag);
+    pos += 2; // tag
+    dataview.writeUint16BE(out, pos, 2);
+    pos += 2; // type = ASCII
+    dataview.writeUint32BE(out, pos, blob.length);
+    pos += 4; // count (includes NUL)
     if (blob.length <= 4) {
       out.set(blob, pos);
     } else {
@@ -92,7 +100,9 @@ function buildFields(inject: MetadataInjectOptions): FieldDef[] {
   const fields: FieldDef[] = [];
 
   const add = (tag: number, val: string | undefined) => {
-    if (val && val.trim().length > 0) fields.push({ tag, value: val.trim() });
+    if (val && val.trim().length > 0) {
+      fields.push({ tag, value: val.trim() });
+    }
   };
 
   add(270, inject.imageDescription);
@@ -108,9 +118,13 @@ function buildFields(inject: MetadataInjectOptions): FieldDef[] {
  * Normalize date/time value to TIFF format "YYYY:MM:DD HH:MM:SS".
  */
 function normalizeDateTime(value: string | undefined): string | undefined {
-  if (!value) return undefined;
+  if (!value) {
+    return undefined;
+  }
   // Already in TIFF format?
-  if (/^\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) return value;
+  if (/^\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
+    return value;
+  }
   // Try ISO 8601
   try {
     const d = new Date(value);
@@ -118,7 +132,9 @@ function normalizeDateTime(value: string | undefined): string | undefined {
       const pad = (n: number) => String(n).padStart(2, '0');
       return `${d.getFullYear()}:${pad(d.getMonth() + 1)}:${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return value;
 }
 
@@ -130,7 +146,9 @@ function normalizeDateTime(value: string | undefined): string | undefined {
  */
 export function buildJpegExifSegment(inject: MetadataInjectOptions): Uint8Array {
   const fields = buildFields(inject);
-  if (fields.length === 0) return new Uint8Array(0);
+  if (fields.length === 0) {
+    return new Uint8Array(0);
+  }
 
   const tiff = buildTiffBlock(fields);
   const exifId = new Uint8Array([0x45, 0x78, 0x69, 0x66, 0x00, 0x00]); // "Exif\0\0"
@@ -186,8 +204,10 @@ export function buildRedactedGpsExif(lat: number, lng: number): Uint8Array {
   const out = new Uint8Array(total);
 
   // TIFF header big-endian
-  out[tiffHeaderOffset] = 0x4d; out[1] = 0x4d;
-  out[2] = 0x00; out[3] = 0x2a;
+  out[tiffHeaderOffset] = 0x4d;
+  out[1] = 0x4d;
+  out[2] = 0x00;
+  out[3] = 0x2a;
   dataview.writeUint32BE(out, 4, ifd0Offset);
 
   // IFD0: 1 entry pointing to GPS IFD
@@ -201,25 +221,30 @@ export function buildRedactedGpsExif(lat: number, lng: number): Uint8Array {
 
   // GPS IFD: 4 entries
   let gPos = ifd0End;
-  dataview.writeUint16BE(out, gPos, 4); gPos += 2; // numEntries = 4
+  dataview.writeUint16BE(out, gPos, 4);
+  gPos += 2; // numEntries = 4
 
   // latRefOffset and lngRefOffset: reference chars are written inline (in-value)
   const latValOffset = valuesStart + 8;
   const lngValOffset = valuesStart + 8 + 24;
 
   const writeGpsEntry = (tag: number, type: number, count: number, valueOrOffset: number) => {
-    dataview.writeUint16BE(out, gPos, tag);       gPos += 2;
-    dataview.writeUint16BE(out, gPos, type);      gPos += 2;
-    dataview.writeUint32BE(out, gPos, count);     gPos += 4;
-    dataview.writeUint32BE(out, gPos, valueOrOffset); gPos += 4;
+    dataview.writeUint16BE(out, gPos, tag);
+    gPos += 2;
+    dataview.writeUint16BE(out, gPos, type);
+    gPos += 2;
+    dataview.writeUint32BE(out, gPos, count);
+    gPos += 4;
+    dataview.writeUint32BE(out, gPos, valueOrOffset);
+    gPos += 4;
   };
 
   // GPSLatitudeRef (1): ASCII 2 bytes (inline)
-  writeGpsEntry(1, 2, 2, (lat >= 0 ? 0x4e000000 : 0x53000000)); // 'N\0\0\0' or 'S\0\0\0'
+  writeGpsEntry(1, 2, 2, lat >= 0 ? 0x4e000000 : 0x53000000); // 'N\0\0\0' or 'S\0\0\0'
   // GPSLatitude (2): RATIONAL[3], 24 bytes
   writeGpsEntry(2, 5, 3, latValOffset);
   // GPSLongitudeRef (3): ASCII 2 bytes (inline)
-  writeGpsEntry(3, 2, 2, (lng >= 0 ? 0x45000000 : 0x57000000)); // 'E\0\0\0' or 'W\0\0\0'
+  writeGpsEntry(3, 2, 2, lng >= 0 ? 0x45000000 : 0x57000000); // 'E\0\0\0' or 'W\0\0\0'
   // GPSLongitude (4): RATIONAL[3], 24 bytes
   writeGpsEntry(4, 5, 3, lngValOffset);
 
@@ -247,11 +272,14 @@ export function buildRedactedGpsExif(lat: number, lng: number): Uint8Array {
  * Wrap a raw TIFF/EXIF block in a JPEG APP1 segment.
  */
 export function wrapInJpegApp1(tiff: Uint8Array): Uint8Array {
-  if (tiff.length === 0) return new Uint8Array(0);
+  if (tiff.length === 0) {
+    return new Uint8Array(0);
+  }
   const exifId = new Uint8Array([0x45, 0x78, 0x69, 0x66, 0x00, 0x00]);
   const content = buffer.concat(exifId, tiff);
   const seg = new Uint8Array(4 + content.length);
-  seg[0] = 0xff; seg[1] = 0xe1;
+  seg[0] = 0xff;
+  seg[1] = 0xe1;
   dataview.writeUint16BE(seg, 2, content.length + 2);
   seg.set(content, 4);
   return seg;

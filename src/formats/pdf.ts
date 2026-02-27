@@ -46,10 +46,18 @@ function blankStringsInRange(data: Uint8Array, start: number, end: number): void
       i++;
       while (i < end && depth > 0) {
         const c = data[i]!;
-        if (c === 0x5c /* '\' */) { i += 2; continue; }
-        if (c === 0x28) depth++;
-        else if (c === 0x29 /* ')' */) depth--;
-        if (depth > 0) data[i] = 0x20; // space
+        if (c === 0x5c /* '\' */) {
+          i += 2;
+          continue;
+        }
+        if (c === 0x28) {
+          depth++;
+        } else if (c === 0x29 /* ')' */) {
+          depth--;
+        }
+        if (depth > 0) {
+          data[i] = 0x20;
+        } // space
         i++;
       }
     } else {
@@ -88,7 +96,9 @@ function findPattern(data: Uint8Array, pattern: string, from = 0): number {
   const p = new TextEncoder().encode(pattern);
   outer: for (let i = from; i <= data.length - p.length; i++) {
     for (let j = 0; j < p.length; j++) {
-      if (data[i + j] !== p[j]) continue outer;
+      if (data[i + j] !== p[j]) {
+        continue outer;
+      }
     }
     return i;
   }
@@ -117,12 +127,19 @@ function findInfoRef(data: Uint8Array): InfoRef | null {
   // Search backwards for "trailer" keyword
   for (let i = data.length - 20; i >= 0; i--) {
     if (
-      data[i] === 0x74 && data[i+1] === 0x72 && data[i+2] === 0x61 && // tra
-      data[i+3] === 0x69 && data[i+4] === 0x6c && data[i+5] === 0x65 && data[i+6] === 0x72 // iler
+      data[i] === 0x74 &&
+      data[i + 1] === 0x72 &&
+      data[i + 2] === 0x61 && // tra
+      data[i + 3] === 0x69 &&
+      data[i + 4] === 0x6c &&
+      data[i + 5] === 0x65 &&
+      data[i + 6] === 0x72 // iler
     ) {
       const trailerText = slice(data, i, Math.min(i + 2048, data.length));
       const m = /\/Info\s+(\d+)\s+(\d+)\s+R/.exec(trailerText);
-      if (m) return { objectNum: Number(m[1]), generation: Number(m[2]) };
+      if (m) {
+        return { objectNum: Number(m[1]), generation: Number(m[2]) };
+      }
       break;
     }
   }
@@ -133,17 +150,27 @@ function findInfoRef(data: Uint8Array): InfoRef | null {
  * Locate the byte range of object `n gen R ... endobj` in `data`.
  * Returns [start, end] or null.
  */
-function findObjectRange(data: Uint8Array, objectNum: number, gen: number): [number, number] | null {
+function findObjectRange(
+  data: Uint8Array,
+  objectNum: number,
+  gen: number
+): [number, number] | null {
   const marker = `${objectNum} ${gen} obj`;
   let off = 0;
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     const pos = findPattern(data, marker, off);
-    if (pos === -1) return null;
+    if (pos === -1) {
+      return null;
+    }
     // Verify it's not mid-stream
-    const beforeOk = pos === 0 || data[pos - 1] === 0x0a || data[pos - 1] === 0x0d || data[pos - 1] === 0x20;
+    const beforeOk =
+      pos === 0 || data[pos - 1] === 0x0a || data[pos - 1] === 0x0d || data[pos - 1] === 0x20;
     if (beforeOk) {
       const endobjPos = findPattern(data, 'endobj', pos + marker.length);
-      if (endobjPos !== -1) return [pos, endobjPos + 6];
+      if (endobjPos !== -1) {
+        return [pos, endobjPos + 6];
+      }
     }
     off = pos + 1;
   }
@@ -153,7 +180,7 @@ function findObjectRange(data: Uint8Array, objectNum: number, gen: number): [num
 
 interface StreamRange {
   start: number; // byte offset of first stream byte (after "stream\n")
-  end: number;   // byte offset just after last stream byte (before "endstream")
+  end: number; // byte offset just after last stream byte (before "endstream")
   objectStart: number;
   objectEnd: number;
 }
@@ -167,33 +194,50 @@ function findXmpStreamRanges(data: Uint8Array): StreamRange[] {
 
   for (const indicator of indicators) {
     let off = 0;
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       const pos = findPattern(data, indicator, off);
-      if (pos === -1) break;
+      if (pos === -1) {
+        break;
+      }
       off = pos + 1;
 
       // Walk back to find "N G obj"
-      let startSearch = Math.max(0, pos - 512);
+      const startSearch = Math.max(0, pos - 512);
       const region = slice(data, startSearch, pos);
       const objMatch = /(\d+)\s+(\d+)\s+obj\s*$/.exec(region);
-      if (!objMatch) continue;
+      if (!objMatch) {
+        continue;
+      }
       const objNum = Number(objMatch[1]);
-      if (checked.has(objNum)) continue;
+      if (checked.has(objNum)) {
+        continue;
+      }
       checked.add(objNum);
 
       // Find stream ... endstream
       const streamKeyword = findPattern(data, 'stream', pos);
-      if (streamKeyword === -1) continue;
+      if (streamKeyword === -1) {
+        continue;
+      }
       // Skip \r\n or \n after "stream"
       let streamStart = streamKeyword + 6;
-      if (data[streamStart] === 0x0d) streamStart++;
-      if (data[streamStart] === 0x0a) streamStart++;
+      if (data[streamStart] === 0x0d) {
+        streamStart++;
+      }
+      if (data[streamStart] === 0x0a) {
+        streamStart++;
+      }
 
       const endstreamPos = findPattern(data, 'endstream', streamStart);
-      if (endstreamPos === -1) continue;
+      if (endstreamPos === -1) {
+        continue;
+      }
 
       const endobjPos = findPattern(data, 'endobj', endstreamPos);
-      if (endobjPos === -1) continue;
+      if (endobjPos === -1) {
+        continue;
+      }
 
       result.push({
         start: streamStart,
@@ -214,7 +258,9 @@ export function remove(data: Uint8Array, _options: RemoveOptions = {}): Uint8Arr
 
   // Bail on encrypted PDFs
   const header = slice(data, 0, Math.min(data.length, 8192));
-  if (isEncrypted(header)) return result;
+  if (isEncrypted(header)) {
+    return result;
+  }
 
   // 1. Zero the Info dictionary
   const infoRef = findInfoRef(data);
@@ -240,10 +286,16 @@ export function getMetadataTypes(data: Uint8Array): string[] {
   const types: string[] = [];
 
   const header = slice(data, 0, Math.min(data.length, 8192));
-  if (isEncrypted(header)) return ['Encrypted'];
+  if (isEncrypted(header)) {
+    return ['Encrypted'];
+  }
 
-  if (findInfoRef(data)) types.push('Document Info');
-  if (findXmpStreamRanges(data).length > 0) types.push('XMP');
+  if (findInfoRef(data)) {
+    types.push('Document Info');
+  }
+  if (findXmpStreamRanges(data).length > 0) {
+    types.push('XMP');
+  }
 
   // Also detect if Info has dates/author/etc.
   const infoRef = findInfoRef(data);
@@ -251,8 +303,12 @@ export function getMetadataTypes(data: Uint8Array): string[] {
     const range = findObjectRange(data, infoRef.objectNum, infoRef.generation);
     if (range) {
       const obj = slice(data, range[0], range[1]);
-      if (/\/(Author|Creator|Producer|Title|Subject)\s*\(/.test(obj)) types.push('Author/Title');
-      if (/\/(CreationDate|ModDate)\s*\(/.test(obj)) types.push('Timestamps');
+      if (/\/(Author|Creator|Producer|Title|Subject)\s*\(/.test(obj)) {
+        types.push('Author/Title');
+      }
+      if (/\/(CreationDate|ModDate)\s*\(/.test(obj)) {
+        types.push('Timestamps');
+      }
     }
   }
 
@@ -263,10 +319,14 @@ export function read(data: Uint8Array): Partial<MetadataMap> {
   const out: Partial<MetadataMap> = {};
 
   const infoRef = findInfoRef(data);
-  if (!infoRef) return out;
+  if (!infoRef) {
+    return out;
+  }
 
   const range = findObjectRange(data, infoRef.objectNum, infoRef.generation);
-  if (!range) return out;
+  if (!range) {
+    return out;
+  }
 
   const obj = slice(data, range[0], range[1]);
 
@@ -275,12 +335,26 @@ export function read(data: Uint8Array): Partial<MetadataMap> {
     return m ? m[1] : undefined;
   };
 
-  const author = extractStr('Author'); if (author) out.artist = author;
-  const title = extractStr('Title'); if (title) out.imageDescription = title;
-  const software = extractStr('Creator') ?? extractStr('Producer'); if (software) out.software = software;
-  const creationDate = extractStr('CreationDate'); if (creationDate) out.dateTime = creationDate;
+  const author = extractStr('Author');
+  if (author) {
+    out.artist = author;
+  }
+  const title = extractStr('Title');
+  if (title) {
+    out.imageDescription = title;
+  }
+  const software = extractStr('Creator') ?? extractStr('Producer');
+  if (software) {
+    out.software = software;
+  }
+  const creationDate = extractStr('CreationDate');
+  if (creationDate) {
+    out.dateTime = creationDate;
+  }
 
-  if (findXmpStreamRanges(data).length > 0) out.hasXmp = true;
+  if (findXmpStreamRanges(data).length > 0) {
+    out.hasXmp = true;
+  }
 
   return out;
 }

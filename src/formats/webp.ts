@@ -359,8 +359,10 @@ export function read(data: Uint8Array): Partial<MetadataMap> {
       if (chunk.fourcc === 'EXIF' && chunk.data.length >= 8) {
         // WebP EXIF: optional 6-byte 'Exif\0\0' prefix
         const hasPrefix =
-          chunk.data[0] === 0x45 && chunk.data[1] === 0x78 &&
-          chunk.data[2] === 0x69 && chunk.data[3] === 0x66;
+          chunk.data[0] === 0x45 &&
+          chunk.data[1] === 0x78 &&
+          chunk.data[2] === 0x69 &&
+          chunk.data[3] === 0x66;
         readExifBlock(hasPrefix ? chunk.data.slice(6) : chunk.data, out);
       } else if (chunk.fourcc === 'XMP ') {
         out.hasXmp = true;
@@ -368,7 +370,9 @@ export function read(data: Uint8Array): Partial<MetadataMap> {
         out.hasIcc = true;
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return out;
 }
 
