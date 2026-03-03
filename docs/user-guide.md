@@ -1,87 +1,83 @@
-# User Guide
+# HB_Scrub — User Guide
 
-HB_Scrub removes EXIF, GPS, and other metadata from images through direct binary manipulation — no re-encoding, no quality loss.
+This guide covers every way to use HB_Scrub: the desktop app, browser API, Node.js file API, CLI, streams, and batch processing.
 
 ---
 
 ## Table of Contents
 
-1. [Quick Start](#quick-start)
-2. [Browser API](#browser-api)
-3. [Node.js API](#nodejs-api)
-4. [CLI](#cli)
-5. [Supported Formats](#supported-formats)
-6. [Preserve Options](#preserve-options)
-7. [HEIC Support](#heic-support)
-8. [Error Handling](#error-handling)
-9. [What Metadata is Removed](#what-metadata-is-removed)
+1. [Desktop App](#1-desktop-app-electron)
+2. [Browser / Universal API](#2-browser--universal-api)
+3. [Node.js File API](#3-nodejs-file-api)
+4. [CLI](#4-cli)
+5. [Batch Processing](#5-batch-processing)
+6. [Stream API](#6-stream-api)
+7. [Reading Metadata](#7-reading-metadata)
+8. [GPS Redaction](#8-gps-redaction)
+9. [Metadata Injection](#9-metadata-injection)
+10. [Field-Level Control](#10-field-level-control)
+11. [Preserve Options](#11-preserve-options)
+12. [Verify Clean](#12-verify-clean)
+13. [Format-Specific Notes](#13-format-specific-notes)
+14. [Error Handling](#14-error-handling)
+15. [API Quick Reference](#15-api-quick-reference)
 
 ---
 
-## Quick Start
+## 1. Desktop App (Electron)
 
-```typescript
-import { removeMetadata } from 'hb-scrub';
+The desktop app provides a full graphical interface — no terminal, no browser tab, no configuration needed.
 
-const result = await removeMetadata(imageBytes); // Uint8Array
+### Launching
 
-console.log(result.format);           // 'jpeg'
-console.log(result.removedMetadata);  // ['EXIF', 'GPS', 'XMP']
-console.log(result.originalSize);     // 3_200_000
-console.log(result.cleanedSize);      // 2_980_000
-
-// result.data is the cleaned Uint8Array
+```bash
+npm run electron
 ```
+
+Or, if you have built a distributable package, launch it like any native application (double-click the AppImage, run the installer, open the .dmg).
+
+### What you can do in the GUI
+
+| Feature | Description |
+|---|---|
+| Drag & Drop | Drop one or more files directly onto the app window |
+| Format detection | Format and metadata summary shown immediately on drop |
+| Preserve options | Toggle orientation, color profile, and copyright retention via checkboxes |
+| GPS redaction | Choose strip / city / region / country from a dropdown |
+| Download | Clean file downloads to your browser's default download folder |
+| Inspect | View raw metadata without removing anything |
+| Batch | Drop multiple files; each is processed independently |
+
+### Port note
+
+The desktop app runs an internal HTTP server on `localhost:3777`. If that port is in use, the app window will fail to load. See the [installation troubleshooting section](./installation.md#electron-app-window-does-not-appear).
 
 ---
 
-## Browser API
+## 2. Browser / Universal API
 
-### From a file input
+The core API works in any JavaScript environment — browser, Node.js, Deno, or Bun.
 
-```typescript
-import { removeMetadata } from 'hb-scrub';
+### `removeMetadata(input, options?)`
 
-const input = document.querySelector('input[type="file"]');
-
-input.addEventListener('change', async (e) => {
-  const file = (e.target as HTMLInputElement).files![0];
-  const buffer = await file.arrayBuffer();
-
-  const result = await removeMetadata(new Uint8Array(buffer));
-
-  // Download cleaned image
-  const blob = new Blob([result.data], { type: `image/${result.format}` });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `clean-${file.name}`;
-  a.click();
-
-  URL.revokeObjectURL(url);
-});
-```
-
-### From a data URL
+The main async entry point.
 
 ```typescript
 import { removeMetadata } from 'hb-scrub';
 
-const dataUrl = 'data:image/jpeg;base64,/9j/4AAQ...';
-const result = await removeMetadata(dataUrl);
+// Accept any of: Uint8Array, ArrayBuffer, base64 data URL string
+const result = await removeMetadata(imageBytes);
+
+result.data            // Uint8Array — the cleaned file
+result.format          // 'jpeg' | 'png' | 'webp' | ...
+result.removedMetadata // ['EXIF', 'GPS', 'XMP']
+result.originalSize    // bytes
+result.cleanedSize     // bytes
 ```
 
-### Accepted input types
+### `removeMetadataSync(input, options?)`
 
-`removeMetadata` accepts:
-- `Uint8Array` — raw image bytes
-- `ArrayBuffer` — e.g. from `file.arrayBuffer()`
-- `string` — a base64 data URL (`data:image/...;base64,...`)
-
-### Sync variant
-
-A synchronous version is also available:
+Synchronous version — useful when async isn't available (e.g. Web Workers, sync scripts).
 
 ```typescript
 import { removeMetadataSync } from 'hb-scrub';
@@ -89,254 +85,550 @@ import { removeMetadataSync } from 'hb-scrub';
 const result = removeMetadataSync(imageBytes);
 ```
 
-> **Note:** Both `removeMetadata` and `removeMetadataSync` perform the same work. The async version exists for API consistency in async contexts; it does not offload to a worker thread.
+### Input types
 
-### Inspecting metadata without removing it
+HB_Scrub accepts all common binary representations:
+
+```typescript
+// Uint8Array (most common)
+removeMetadata(new Uint8Array(buffer));
+
+// ArrayBuffer
+removeMetadata(buffer);
+
+// Base64 data URL
+removeMetadata('data:image/jpeg;base64,/9j/4AAQ...');
+```
+
+### Using in the browser with a file input
+
+```typescript
+import { removeMetadata } from 'hb-scrub';
+
+document.getElementById('file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  const buffer = await file.arrayBuffer();
+  const result = await removeMetadata(new Uint8Array(buffer));
+
+  // Create a download link
+  const blob = new Blob([result.data], { type: `image/${result.format}` });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'clean-' + file.name;
+  a.click();
+});
+```
+
+---
+
+## 3. Node.js File API
+
+Import from `hb-scrub/node` for file-system operations.
+
+### `processFile(inputPath, options?)`
+
+Read a file from disk, strip metadata, write the result.
+
+```typescript
+import { processFile } from 'hb-scrub/node';
+
+// Output: photo-clean.jpg (same directory)
+const result = await processFile('photo.jpg');
+
+result.inputPath   // '/abs/path/to/photo.jpg'
+result.outputPath  // '/abs/path/to/photo-clean.jpg'
+result.format      // 'jpeg'
+result.originalSize
+result.cleanedSize
+result.removedMetadata
+```
+
+**Output path resolution** (evaluated in order):
+
+1. `options.outputPath` — explicit path
+2. `options.inPlace: true` — overwrites the input
+3. Default — same directory, with `options.suffix` (default `'-clean'`) inserted before the extension
+
+```typescript
+// Overwrite the original
+await processFile('photo.jpg', { inPlace: true });
+
+// Custom output path
+await processFile('photo.jpg', { outputPath: 'output/clean.jpg' });
+
+// Custom suffix
+await processFile('photo.jpg', { suffix: '-scrubbed' });
+// → photo-scrubbed.jpg
+```
+
+---
+
+## 4. CLI
+
+### Installation
+
+```bash
+npm install -g hb-scrub
+# or run without installing:
+npx hb-scrub photo.jpg
+```
+
+### Synopsis
+
+```
+hb-scrub <file|dir...> [options]
+```
+
+### Full options
+
+```
+BASIC
+  -i, --in-place              Overwrite original files
+  -o, --output <path>         Output file (single file only)
+  -s, --suffix <suffix>       Output suffix (default: "-clean")
+  -r, --recursive             Recurse into directories
+  -q, --quiet                 Suppress output
+  -h, --help                  Show help
+  -v, --version               Show version
+
+METADATA INSPECTION
+  --inspect                   Print metadata; no removal
+
+FIELD CONTROL
+  --preserve-orientation      Keep EXIF orientation tag
+  --preserve-color-profile    Keep ICC color profile
+  --preserve-copyright        Keep copyright notice
+  --remove <fields>           Remove ONLY these fields (comma-separated)
+  --keep <fields>             Always keep these fields (comma-separated)
+
+GPS
+  --gps-redact <precision>    city | region | country | remove (default: remove)
+
+INJECTION
+  --inject-copyright <text>   Inject copyright string
+  --inject-software <text>    Inject software string
+  --inject-artist <text>      Inject artist string
+
+BATCH / DIRECTORY
+  --concurrency <N>           Max parallel files (default: 4)
+  --dry-run                   Preview without writing
+  --skip-existing             Skip if output already exists
+  --backup <suffix>           Back up originals first (e.g. .bak)
+
+STDIN / STDOUT
+  Pass '-' as the file to read from stdin / write to stdout.
+
+AUDIT REPORT
+  --report <file.json>        Write JSON audit report
+
+WATCH MODE
+  --watch <dir>               Watch for new files and process automatically
+```
+
+### Common examples
+
+```bash
+# Basic — writes photo-clean.jpg
+hb-scrub photo.jpg
+
+# Inspect metadata (read-only)
+hb-scrub photo.jpg --inspect
+
+# Strip all metadata from multiple files
+hb-scrub *.jpg *.png
+
+# Overwrite originals with backup
+hb-scrub photos/ --in-place --backup .orig --recursive
+
+# Remove only GPS; keep everything else
+hb-scrub photo.jpg --remove GPS
+
+# Keep copyright and color profile; strip the rest
+hb-scrub photo.jpg --keep "Copyright,ICC Profile"
+
+# Redact GPS to city-level (≈ 1 km) instead of stripping
+hb-scrub photo.jpg --gps-redact city
+
+# Inject a copyright notice
+hb-scrub photo.jpg --inject-copyright "© 2026 Honey Badger Universe"
+
+# Process a whole directory, 8 files at a time
+hb-scrub photos/ --recursive --concurrency 8
+
+# Dry-run — shows what would happen without writing
+hb-scrub photos/ --recursive --dry-run
+
+# Write an audit report
+hb-scrub photos/ --recursive --report audit.json
+
+# Stdin / stdout pipeline
+cat photo.jpg | hb-scrub - > clean.jpg
+
+# Watch a folder and clean new files automatically
+hb-scrub --watch ./incoming
+```
+
+---
+
+## 5. Batch Processing
+
+### `processDir(dir, options?)`
+
+Process all supported image files in a directory.
+
+```typescript
+import { processDir } from 'hb-scrub/node';
+
+const { report } = await processDir('./photos', {
+  recursive:    true,
+  concurrency:  8,
+  inPlace:      false,
+  suffix:       '-clean',
+  dryRun:       false,
+  backupSuffix: '.bak',
+  skipExisting: true,
+  gpsRedact:    'city',
+});
+
+console.log(`${report.successful}/${report.totalFiles} files processed`);
+console.log(`${report.totalBytesRemoved} bytes of metadata removed`);
+```
+
+### `processFiles(paths, options?)`
+
+Process an explicit list of file paths.
+
+```typescript
+import { processFiles } from 'hb-scrub/node';
+
+const result = await processFiles(['a.jpg', 'b.png', 'c.tiff'], {
+  inPlace: true,
+});
+```
+
+### Audit report
+
+Both functions return a `BatchResult` with a full `AuditReport`. Save it to disk:
+
+```typescript
+import { writeFile } from 'node:fs/promises';
+
+const { report } = await processDir('./photos', { recursive: true });
+await writeFile('audit.json', JSON.stringify(report, null, 2));
+```
+
+The report contains per-file entries with: `file`, `format`, `originalSize`, `cleanedSize`, `removedMetadata`, `outputPath`, and `error` (if the file failed).
+
+### `BatchOptions`
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `inPlace` | `boolean` | `false` | Overwrite input files |
+| `outputDir` | `string` | same dir | Output directory |
+| `suffix` | `string` | `'-clean'` | Filename suffix |
+| `concurrency` | `number` | `4` | Max files processed in parallel |
+| `dryRun` | `boolean` | `false` | Detect only — write nothing |
+| `skipExisting` | `boolean` | `false` | Skip if output already exists |
+| `backupSuffix` | `string` | — | Copy original before overwriting |
+| `include` | `string[]` | — | Glob patterns to include |
+| `exclude` | `string[]` | — | Glob patterns to exclude |
+
+---
+
+## 6. Stream API
+
+Use `createScrubStream` to pipe files through a Node.js Transform stream — ideal for processing uploads or large files without loading the full content into application memory.
+
+```typescript
+import { createScrubStream } from 'hb-scrub/stream';
+import { createReadStream, createWriteStream } from 'node:fs';
+
+createReadStream('photo.jpg')
+  .pipe(createScrubStream({ preserveOrientation: true }))
+  .pipe(createWriteStream('photo-clean.jpg'));
+```
+
+With an HTTP upload:
+
+```typescript
+import { createScrubStream } from 'hb-scrub/stream';
+
+app.post('/upload', (req, res) => {
+  req
+    .pipe(createScrubStream())
+    .pipe(res);
+});
+```
+
+> **Note:** The stream buffers the entire input before processing. EXIF offsets can appear anywhere in a file and cannot be stripped incrementally. Peak memory usage is roughly twice the file size.
+
+---
+
+## 7. Reading Metadata
+
+Inspect a file's metadata as structured data without modifying it.
+
+```typescript
+import { readMetadata } from 'hb-scrub';
+
+const { metadata, format, fileSize } = await readMetadata(imageBytes);
+
+console.log(metadata.make);            // 'Apple'
+console.log(metadata.model);           // 'iPhone 15 Pro'
+console.log(metadata.software);        // 'iOS 17.0'
+console.log(metadata.dateTime);        // '2026:01:15 14:32:00'
+console.log(metadata.gps?.latitude);   // 51.505
+console.log(metadata.gps?.longitude);  // -0.09
+console.log(metadata.gps?.altitude);   // 32.5
+console.log(metadata.exif?.iso);       // 400
+console.log(metadata.exif?.focalLength); // 4.2
+console.log(metadata.hasXmp);          // true
+console.log(metadata.hasIcc);          // true
+```
+
+### Quick metadata-type check
 
 ```typescript
 import { getMetadataTypes } from 'hb-scrub';
 
 const types = getMetadataTypes(imageBytes);
-// e.g. ['EXIF', 'GPS', 'ICC Profile', 'XMP']
+// ['EXIF', 'GPS', 'XMP', 'ICC Profile', 'IPTC']
 ```
 
-### Detecting the format
+### `MetadataMap` fields
 
-```typescript
-import { detectFormat, getMimeType } from 'hb-scrub';
-
-const format = detectFormat(imageBytes); // 'jpeg' | 'png' | ...
-const mime   = getMimeType(format);      // 'image/jpeg'
-```
-
----
-
-## Node.js API
-
-Import from `hb-scrub/node` for file system operations.
-
-### Process a file
-
-```typescript
-import { processFile } from 'hb-scrub/node';
-
-// Creates photo-clean.jpg in the same directory
-const result = await processFile('photo.jpg');
-
-console.log(result.inputPath);   // /absolute/path/photo.jpg
-console.log(result.outputPath);  // /absolute/path/photo-clean.jpg
-console.log(result.removedMetadata); // ['EXIF', 'GPS']
-```
-
-### Overwrite the original
-
-```typescript
-await processFile('photo.jpg', { inPlace: true });
-```
-
-### Custom output path
-
-```typescript
-await processFile('photo.jpg', { outputPath: 'output/clean.jpg' });
-```
-
-### Custom suffix
-
-```typescript
-// Creates photo-stripped.jpg
-await processFile('photo.jpg', { suffix: '-stripped' });
-```
-
-### RAW files → JPEG output
-
-For proprietary RAW formats (CR2, NEF, ARW), HB_Scrub extracts the embedded JPEG preview and strips its metadata. The output file extension is automatically updated:
-
-```typescript
-const result = await processFile('photo.cr2');
-// result.outputPath => photo-clean.jpg  (not .cr2)
-// result.outputFormat => 'jpeg'
-```
-
-### Using RemoveOptions with processFile
-
-All [preserve options](#preserve-options) are supported:
-
-```typescript
-await processFile('photo.jpg', {
-  preserveOrientation: true,
-  preserveColorProfile: true,
-  suffix: '-meta-stripped',
-});
-```
-
----
-
-## CLI
-
-### Basic usage
-
-```bash
-hb-scrub <file...> [options]
-```
-
-### Single file
-
-```bash
-hb-scrub photo.jpg
-# → creates photo-clean.jpg
-```
-
-### Multiple files
-
-```bash
-hb-scrub *.jpg
-# → creates photo1-clean.jpg, photo2-clean.jpg, ...
-```
-
-### Overwrite originals
-
-```bash
-hb-scrub photo.jpg --in-place
-hb-scrub photo.jpg -i
-```
-
-### Custom output path (single file only)
-
-```bash
-hb-scrub photo.jpg --output output/clean.jpg
-hb-scrub photo.jpg -o output/clean.jpg
-```
-
-### Custom suffix
-
-```bash
-hb-scrub photo.jpg --suffix -stripped
-# → creates photo-stripped.jpg
-```
-
-### Preserve options
-
-```bash
-hb-scrub photo.jpg --preserve-orientation
-hb-scrub photo.jpg --preserve-color-profile
-hb-scrub photo.jpg --preserve-copyright
-```
-
-### Quiet mode
-
-```bash
-hb-scrub photo.jpg --quiet
-hb-scrub photo.jpg -q
-```
-
-### Show version
-
-```bash
-hb-scrub --version
-hb-scrub -v
-```
-
-### Show help
-
-```bash
-hb-scrub --help
-hb-scrub -h
-```
-
-### Exit codes
-
-| Code | Meaning |
-|---|---|
-| `0` | All files processed successfully |
-| `1` | One or more files failed (error printed per file) |
-
-### Example output
-
-```
-✓ photo.jpg → photo-clean.jpg (removed EXIF, GPS, XMP | 3.1 MB → 2.9 MB)
-✗ corrupt.jpg: Invalid JPEG: expected marker
-```
-
----
-
-## Supported Formats
-
-| Format | Extension(s) | Metadata removed |
+| Field | Type | Description |
 |---|---|---|
-| JPEG | `.jpg`, `.jpeg` | EXIF (APP1), XMP (APP1), IPTC (APP13), ICC Profile (APP2), Adobe (APP14), Comments, all unknown APP segments |
-| PNG | `.png` | `tEXt`, `iTXt`, `zTXt`, `eXIf`, `tIME`, `iCCP` chunks |
-| WebP | `.webp` | `EXIF`, `XMP`, `ICCP` chunks |
-| GIF | `.gif` | Comment extensions, XMP application extensions, other application extensions |
-| SVG | `.svg` | `<metadata>`, `<title>`, `<desc>`, `<rdf:RDF>`, editor namespaces (Inkscape, Illustrator, etc.), XML comments, `data-*` attributes |
-| TIFF | `.tif`, `.tiff` | ImageDescription, Make, Model, Software, DateTime, Artist, Copyright, EXIF IFD, GPS IFD, XMP tag |
-| HEIC/HEIF | `.heic`, `.heif` | EXIF item, XMP item (in-place zero overwrite within ISOBMFF structure) |
-| DNG | `.dng` | Same as TIFF (DNG is TIFF-based) |
-| RAW (CR2/NEF/ARW) | `.cr2`, `.nef`, `.arw` | Extracts embedded JPEG preview and strips its metadata; output is JPEG |
-
-### Format detection
-
-Format is detected entirely from **file content** (magic bytes), not from the file extension. A renamed JPEG will still be processed correctly.
+| `make` | `string` | Camera make |
+| `model` | `string` | Camera model |
+| `software` | `string` | Creating software |
+| `dateTime` | `string` | Modification timestamp |
+| `artist` | `string` | Artist / author |
+| `copyright` | `string` | Copyright notice |
+| `orientation` | `number` | EXIF orientation value (1–8) |
+| `gps` | `GpsCoordinates` | Latitude, longitude, altitude, speed |
+| `exif` | `ExifData` | Exposure time, ISO, focal length, flash, … |
+| `hasXmp` | `boolean` | XMP block present |
+| `hasIcc` | `boolean` | ICC color profile present |
+| `hasIptc` | `boolean` | IPTC block present |
+| `hasThumbnail` | `boolean` | Embedded thumbnail present |
 
 ---
 
-## Preserve Options
+## 8. GPS Redaction
 
-By default, all metadata is removed. Use these options to selectively keep specific items.
-
-| Option | Type | Description |
-|---|---|---|
-| `preserveOrientation` | `boolean` | Keep the EXIF orientation tag. If the original EXIF is removed, a minimal EXIF segment containing only the orientation value is re-injected. Applies to JPEG and WebP. |
-| `preserveColorProfile` | `boolean` | Keep the ICC color profile. Applies to JPEG (APP2), PNG (`iCCP` chunk), and WebP (`ICCP` chunk). |
-| `preserveCopyright` | `boolean` | Keep the copyright notice. Applies to TIFF/DNG (tag 33432). |
-| `preserveTitle` | `boolean` | SVG only: keep the `<title>` element. |
-| `preserveDescription` | `boolean` | SVG only: keep the `<desc>` element. |
-
-### Example
+Instead of stripping GPS entirely, you can truncate coordinates to a lower precision level — useful when approximate location data is acceptable but exact coordinates are not.
 
 ```typescript
-import { removeMetadata } from 'hb-scrub';
-
 const result = await removeMetadata(imageBytes, {
-  preserveOrientation: true,   // keep rotation info
-  preserveColorProfile: true,  // keep colour accuracy
+  gpsRedact: 'city',      // ≈ 1 km radius
+  // gpsRedact: 'region', // ≈ 11 km radius
+  // gpsRedact: 'country',// ≈ 111 km radius
+  // gpsRedact: 'remove', // strip entirely (default)
+  // gpsRedact: 'exact',  // no change
 });
+```
 
-// result.removedMetadata will NOT include 'ICC Profile'
-// even if an ICC profile was present in the original
+| Level | Decimal places | Typical radius | Use case |
+|---|---|---|---|
+| `'exact'` | Full | Original | No redaction |
+| `'city'` | 2 | ≈ 1 km | Neighbourhood-level |
+| `'region'` | 1 | ≈ 11 km | City-level |
+| `'country'` | 0 | ≈ 111 km | Country-level |
+| `'remove'` | — | None | Full removal (default) |
+
+CLI equivalent:
+
+```bash
+hb-scrub photo.jpg --gps-redact city
 ```
 
 ---
 
-## HEIC Support
+## 9. Metadata Injection
 
-HEIC processing is provided as a separate import to keep the core bundle small. Import it from `hb-scrub/heic`.
-
-### Direct use
+Write clean metadata fields into the output after scrubbing. Supported for JPEG (EXIF APP1) and PNG (eXIf chunk). Injection is silently skipped for other formats.
 
 ```typescript
-import { heic } from 'hb-scrub/heic';
-
-const cleaned = heic.remove(imageBytes);
+const result = await removeMetadata(imageBytes, {
+  inject: {
+    copyright:        '© 2026 Honey Badger Universe',
+    software:         'HB_Scrub v1.1.0',
+    artist:           'James Temple',
+    imageDescription: 'Product photo — cleaned',
+    dateTime:         '2026:03:03 12:00:00',
+  },
+});
 ```
 
-### With the main API (auto-dispatch)
+CLI equivalents:
 
-The main `removeMetadata` function dispatches to the HEIC handler automatically once you import it. Import `hb-scrub/heic` anywhere in your module graph before calling `removeMetadata` with HEIC data:
-
-```typescript
-import { removeMetadata } from 'hb-scrub';
-import 'hb-scrub/heic'; // registers the HEIC handler
-
-const result = await removeMetadata(heicBytes);
+```bash
+hb-scrub photo.jpg --inject-copyright "© 2026 Honey Badger Universe"
+hb-scrub photo.jpg --inject-software  "HB_Scrub v1.1.0"
+hb-scrub photo.jpg --inject-artist    "James Temple"
 ```
-
-> **Implementation note:** HEIC metadata is zeroed out in-place within the ISOBMFF box structure rather than removed, because relocating boxes requires recalculating all offsets. The file size stays the same but all EXIF and XMP data bytes are overwritten with zeros.
 
 ---
 
-## Error Handling
+## 10. Field-Level Control
 
-All errors extend `HbScrubError` and can be caught individually or together.
+### Remove only specific fields
+
+Strip only the listed fields and leave everything else untouched:
+
+```typescript
+await removeMetadata(imageBytes, { remove: ['GPS'] });
+await removeMetadata(imageBytes, { remove: ['GPS', 'EXIF'] });
+```
+
+CLI:
+
+```bash
+hb-scrub photo.jpg --remove GPS
+hb-scrub photo.jpg --remove "GPS,EXIF"
+```
+
+### Keep specific fields
+
+Remove everything *except* the listed fields:
+
+```typescript
+await removeMetadata(imageBytes, { keep: ['Copyright', 'ICC Profile'] });
+```
+
+CLI:
+
+```bash
+hb-scrub photo.jpg --keep "Copyright,ICC Profile"
+```
+
+### Named fields
+
+| Field name | What it covers |
+|---|---|
+| `'GPS'` | All GPS tags |
+| `'EXIF'` | EXIF IFD (exposure, ISO, focal length, etc.) |
+| `'XMP'` | XMP metadata block |
+| `'ICC Profile'` | Embedded colour profile |
+| `'IPTC'` | IPTC/NAA metadata |
+| `'Copyright'` | Copyright string (EXIF tag 33432) |
+| `'Orientation'` | EXIF orientation tag (274) |
+| `'Make'` | Camera manufacturer |
+| `'Model'` | Camera model |
+| `'Software'` | Creating software |
+| `'DateTime'` | File timestamp |
+| `'Artist'` | Artist / author field |
+| `'Comment'` | EXIF/JPEG comment |
+| `'Thumbnail'` | Embedded thumbnail |
+| `'Title'` | Title field (SVG, XMP) |
+| `'Description'` | Description field (SVG, XMP) |
+
+---
+
+## 11. Preserve Options
+
+Convenience flags for the most commonly retained fields:
+
+| Option (`RemoveOptions`) | CLI flag | Keeps |
+|---|---|---|
+| `preserveOrientation: true` | `--preserve-orientation` | EXIF Orientation (tag 274) |
+| `preserveColorProfile: true` | `--preserve-color-profile` | Embedded ICC color profile |
+| `preserveCopyright: true` | `--preserve-copyright` | Copyright string (tag 33432) |
+| `preserveTitle: true` | — | Title field (SVG / XMP) |
+| `preserveDescription: true` | — | Description field (SVG / XMP) |
+
+```typescript
+const result = await removeMetadata(imageBytes, {
+  preserveOrientation:  true,
+  preserveColorProfile: true,
+});
+```
+
+---
+
+## 12. Verify Clean
+
+Confirm that no known metadata remains after scrubbing:
+
+```typescript
+import { verifyClean } from 'hb-scrub';
+
+const { clean, remainingMetadata } = await verifyClean(cleanedBytes);
+
+if (!clean) {
+  console.warn('Residual metadata detected:', remainingMetadata);
+  // e.g. ['ICC Profile']
+}
+```
+
+`verifyClean` runs `getMetadataTypes` on the cleaned output and reports any metadata types it can still detect. A `preserveColorProfile: true` run will typically report `['ICC Profile']` — this is expected.
+
+---
+
+## 13. Format-Specific Notes
+
+### JPEG
+
+- All APP0–APPF segments scanned
+- Strips: EXIF (APP1), XMP (APP1), Extended XMP, ICC Profile (APP2), IPTC (APP13), Adobe (APP14), all unknown APPn segments
+- `preserveOrientation` re-injects a minimal EXIF segment containing **only** the orientation tag
+
+### PNG
+
+- Strips: `eXIf`, `tEXt`, `iTXt`, `zTXt`, `iCCP`, `tIME`
+- All structural chunks preserved: `IHDR`, `IDAT`, `IEND`, `PLTE`, `tRNS`, APNG animation chunks
+- CRC-32 checksums recomputed for all kept chunks
+
+### WebP
+
+- RIFF container — strips `EXIF` and `XMP` chunks
+- `ICCP` removed unless `preserveColorProfile`
+- `VP8X` feature flags chunk automatically regenerated after removal
+
+### GIF
+
+- Strips: Comment extensions (`0xFE`), XMP application extensions, other application-specific extensions
+- Preserves: Graphics Control extensions (animation timing), NETSCAPE extension (loop count)
+
+### SVG
+
+- Text-based — processed with regex/string operations on decoded UTF-8 content
+- Strips: `<metadata>`, `<rdf:RDF>`, `<title>` (unless `preserveTitle`), `<desc>` (unless `preserveDescription`)
+- Removes editor namespaces: Inkscape, Sodipodi, Illustrator, Sketch, Figma
+- Removes: XML comments, `data-*` attributes, auto-generated UUID `id` attributes
+
+### TIFF / DNG
+
+- In-place IFD modification — existing byte offsets are not changed
+- Tags removed by default: Make (271), Model (272), Software (305), DateTime (306), Artist (315), Copyright (33432), ExifIFD (34665), GPSInfo (34853), XMP (700), ImageDescription (270)
+- Conditionally kept: Orientation (274), ICCProfile (34675), Copyright (33432)
+
+### HEIC / HEIF / AVIF
+
+- Import from `hb-scrub/heic` for direct access
+- ISOBMFF container — EXIF and XMP items located via `iinf` and `iloc` boxes, then **zeroed in-place** (no box-tree reconstruction needed)
+
+### PDF
+
+- Info dictionary fields zeroed
+- Embedded XMP metadata stream zeroed
+
+### MP4 / MOV
+
+- Atom tree walking
+- Strips: `©mak` (make), `©mod` (model), `©cpy` (copyright), `©swr` (software) from `moov → udta` box
+
+### RAW (CR2, NEF, ARW)
+
+- Extracts the embedded JPEG preview and runs it through the JPEG handler
+- Output is the cleaned JPEG preview, **not** the original RAW data
+- `result.isPreview === true` for proprietary RAW; `result.isPreview === false` for DNG
+
+---
+
+## 14. Error Handling
 
 ```typescript
 import {
@@ -344,55 +636,85 @@ import {
   HbScrubError,
   UnsupportedFormatError,
   CorruptedFileError,
-  InvalidFormatError,
+  BufferOverflowError,
 } from 'hb-scrub';
 
 try {
-  const result = await removeMetadata(bytes);
+  const result = await removeMetadata(imageBytes);
 } catch (err) {
   if (err instanceof UnsupportedFormatError) {
-    console.log(`Format not supported: ${err.format}`);
-
+    // File format not recognised or not supported
+    console.error('Unsupported format:', err.message);
   } else if (err instanceof CorruptedFileError) {
-    console.log(`File corrupted at offset ${err.offset ?? 'unknown'}`);
-
-  } else if (err instanceof InvalidFormatError) {
-    console.log(`Bad input: ${err.message}`);
-
+    // File structure is invalid
+    console.error('Corrupted file:', err.message);
+  } else if (err instanceof BufferOverflowError) {
+    // Internal read/write out of bounds — likely a corrupt file
+    console.error('Buffer overflow:', err.message);
   } else if (err instanceof HbScrubError) {
-    console.log(`HB_Scrub error: ${err.message}`);
-
+    // Any other HB_Scrub-specific error
+    console.error('Processing failed:', err.message);
   } else {
-    throw err; // unexpected
+    throw err;
   }
 }
 ```
 
 ### Error classes
 
-| Class | Thrown when |
-|---|---|
-| `InvalidFormatError` | Input is not a `Uint8Array`, `ArrayBuffer`, or valid data URL |
-| `UnsupportedFormatError` | File format is not recognised or has no handler |
-| `CorruptedFileError` | File structure is malformed (truncated segment, bad header, etc.) |
-| `BufferOverflowError` | A read extends beyond the buffer bounds (usually indicates corruption) |
-| `HeicProcessingError` | HEIC-specific parsing failure |
-| `SvgParseError` | SVG does not contain a valid `<svg>` element |
+| Class | Extends | Thrown when |
+|---|---|---|
+| `HbScrubError` | `Error` | Base class for all HB_Scrub errors |
+| `UnsupportedFormatError` | `HbScrubError` | Format not recognised |
+| `InvalidFormatError` | `HbScrubError` | Format recognised but file is structurally invalid |
+| `CorruptedFileError` | `HbScrubError` | File is too damaged to process |
+| `BufferOverflowError` | `HbScrubError` | Read/write went out of buffer bounds |
+| `HeicProcessingError` | `HbScrubError` | HEIC-specific parsing error |
+| `SvgParseError` | `HbScrubError` | SVG-specific processing error |
 
 ---
 
-## What Metadata is Removed
+## 15. API Quick Reference
 
-The following data is stripped by default (subject to preserve options):
+### Core (`hb-scrub`)
 
-- **GPS coordinates** — exact location where the photo was captured
-- **EXIF data** — camera make and model, lens information, aperture, shutter speed, ISO, focal length, flash settings
-- **Timestamps** — when the photo was taken, modified, or digitised
-- **Device identifiers** — camera serial number, body and lens unique IDs
-- **Software tags** — editing software name and version
-- **Author information** — artist name, copyright holder, creator
-- **Embedded thumbnails** — small preview images that may contain content that was cropped or edited out of the main image
-- **XMP metadata** — RDF/XML sidecar metadata embedded in the file
-- **IPTC data** — captions, keywords, contact info, usage rights
-- **Comments** — freeform text comments embedded in JPEG/GIF
-- **Editor artefacts** — Inkscape, Illustrator, Sketch, Figma namespaces in SVG files
+| Function | Signature | Description |
+|---|---|---|
+| `removeMetadata` | `(input, options?) → Promise<RemoveResult>` | Remove metadata async |
+| `removeMetadataSync` | `(input, options?) → RemoveResult` | Remove metadata sync |
+| `readMetadata` | `(input) → Promise<ReadResult>` | Read metadata async |
+| `readMetadataSync` | `(input) → ReadResult` | Read metadata sync |
+| `verifyClean` | `(input) → Promise<VerifyResult>` | Check no metadata remains async |
+| `verifyCleanSync` | `(input) → VerifyResult` | Sync version |
+| `getMetadataTypes` | `(input) → string[]` | List metadata type names present |
+| `detectFormat` | `(input) → SupportedFormat` | Detect file format |
+| `getMimeType` | `(format) → string` | Map format to MIME type |
+| `isFormatSupported` | `(format) → boolean` | Check format support |
+| `getSupportedFormats` | `() → SupportedFormat[]` | List all formats |
+
+### Node.js (`hb-scrub/node`)
+
+| Function | Signature | Description |
+|---|---|---|
+| `processFile` | `(path, options?) → Promise<ProcessFileResult>` | Read, strip, write one file |
+| `processDir` | `(dir, options?) → Promise<BatchResult>` | Process a directory |
+| `processFiles` | `(paths, options?) → Promise<BatchResult>` | Process a list of files |
+| `createScrubStream` | `(options?) → ScrubTransform` | Create a Transform stream |
+
+### `RemoveOptions`
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `preserveOrientation` | `boolean` | `false` | Keep EXIF orientation |
+| `preserveColorProfile` | `boolean` | `false` | Keep ICC color profile |
+| `preserveCopyright` | `boolean` | `false` | Keep copyright field |
+| `preserveTitle` | `boolean` | `false` | Keep title field |
+| `preserveDescription` | `boolean` | `false` | Keep description field |
+| `remove` | `MetadataFieldName[]` | — | Remove only these; keep all others |
+| `keep` | `MetadataFieldName[]` | — | Always keep these fields |
+| `gpsRedact` | `GpsRedactPrecision` | `'remove'` | GPS handling |
+| `inject` | `MetadataInjectOptions` | — | Fields to write into cleaned output |
+
+---
+
+*Documentation for HB_Scrub v1.1.0 — © 2026 Honey Badger Universe*
