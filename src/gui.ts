@@ -5,7 +5,6 @@
  */
 
 import * as http from 'node:http';
-import * as url from 'node:url';
 import {
   removeMetadataSync,
   readMetadataSync,
@@ -480,8 +479,8 @@ const HTML = `<!DOCTYPE html>
 // ─── HTTP Server ─────────────────────────────────────────────────────────────
 
 function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
-  const parsedUrl = url.parse(req.url ?? '/');
-  const pathname = parsedUrl.pathname ?? '/';
+  const parsedUrl = new URL(req.url ?? '/', 'http://localhost');
+  const pathname = parsedUrl.pathname;
 
   // ── GET / → serve UI ────────────────────────────────────────────────────
   if (req.method === 'GET' && pathname === '/') {
