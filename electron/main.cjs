@@ -1,9 +1,19 @@
 'use strict';
 
+// ─── Suppress benign Linux/Chromium startup warnings ─────────────────────────
+process.noDeprecation = true;                   // suppress url.parse DEP0169
+process.env.GTK_MODULES = '';                   // suppress colorreload/window-decorations GTK warnings
+process.env.GTK2_RC_FILES = '';
+
 const { app, BrowserWindow, shell, Menu } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
+
+// Suppress Chromium GPU/VSync and DBus noise on Linux
+app.commandLine.appendSwitch('disable-gpu-vsync');
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+app.commandLine.appendSwitch('log-level', '3'); // only fatal errors
 
 const PORT = 3777;
 let mainWindow = null;
