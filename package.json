@@ -47,6 +47,11 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "gui": "npm run build && node dist/hb-scrub.gui.js",
+    "electron": "npm run build && electron electron/main.cjs",
+    "electron:build": "npm run build && electron-builder --publish never",
+    "electron:build:linux": "npm run build && electron-builder --linux --publish never",
+    "electron:build:win": "npm run build && electron-builder --win --publish never",
+    "electron:build:mac": "npm run build && electron-builder --mac --publish never",
     "prepublishOnly": "npm run build && npm run test && npm run lint"
   },
   "keywords": [
@@ -88,6 +93,8 @@
     "@types/node": "^20.10.0",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
+    "electron": "^40.6.1",
+    "electron-builder": "^26.8.1",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-prettier": "^5.0.0",
@@ -101,6 +108,39 @@
     "node": ">=20.0.0"
   },
   "overrides": {
-    "ajv": "^6.14.0"
+    "ajv": "^8.0.0"
+  },
+  "build": {
+    "appId": "org.honeybadger.hb-scrub",
+    "productName": "HB Scrub",
+    "copyright": "Copyright © 2026 Honey Badger Universe",
+    "extraMetadata": {
+      "main": "electron/main.cjs"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/main.cjs",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "electron/assets"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Utility"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.utilities"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }
