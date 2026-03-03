@@ -75,16 +75,15 @@
     "scrub",
     "batch"
   ],
-  "author": "Fabio Souto",
+  "author": "James Temple <james@honey-badger.org>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/fasouto/picscrub.git"
+    "url": "https://github.com/James-HoneyBadger/HB_Scrub.git"
   },
   "bugs": {
-    "url": "https://github.com/fasouto/picscrub/issues"
+    "url": "https://github.com/James-HoneyBadger/HB_Scrub/issues"
   },
-  "homepage": "https://picscrub.com",
   "devDependencies": {
     "@types/node": "^20.10.0",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
