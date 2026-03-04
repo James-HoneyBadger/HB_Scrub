@@ -21,6 +21,8 @@ This guide covers every way to use HB_Scrub: the desktop app, browser API, Node.
 13. [Format-Specific Notes](#13-format-specific-notes)
 14. [Error Handling](#14-error-handling)
 15. [API Quick Reference](#15-api-quick-reference)
+16. [Named Profiles](#16-named-profiles)
+17. [Config File (.hbscrubrc)](#17-config-file-hbscrubrc)
 
 ---
 
@@ -41,12 +43,18 @@ Or, if you have built a distributable package, launch it like any native applica
 | Feature | Description |
 |---|---|
 | Drag & Drop | Drop one or more files directly onto the app window |
+| Browse Files | "Browse Files" button opens a native OS file-picker dialog (Cmd/Ctrl+O) |
+| Clipboard Paste | Paste image files from the clipboard (Ctrl+V / Cmd+V) without opening a dialog |
 | Format detection | Format and metadata summary shown immediately on drop |
-| Preserve options | Toggle orientation, color profile, and copyright retention via checkboxes |
+| Preserve options | Toggle orientation, color profile, and copyright retention via checkboxes; settings persist across sessions |
 | GPS redaction | Choose strip / city / region / country from a dropdown |
-| Download | Clean file downloads to your browser's default download folder |
+| Before/After Diff | Removed metadata types are shown as struck-through text alongside the clean output |
+| Download | Clean file downloads to your default download folder |
+| ZIP Download | Download all cleaned files at once as a single `hb-scrub-clean.zip` |
 | Inspect | View raw metadata without removing anything |
-| Batch | Drop multiple files; each is processed independently |
+| Batch | Drop or paste multiple files; each is processed independently |
+| System Tray | App minimises to the system tray when closed |
+| Watch Folder | Select a directory via the tray menu; new files are automatically cleaned and saved in-place |
 
 ### Port note
 
@@ -194,6 +202,17 @@ BASIC
 
 METADATA INSPECTION
   --inspect                   Print metadata; no removal
+  --verify                    Verify the output contains no residual metadata
+
+OUTPUT FORMAT
+  --output-format <fmt>       table (default) | json | csv
+                              Controls how per-file results are printed to stdout
+
+PROFILES
+  --profile <name>            Apply a preset group of options:
+                              privacy  — strip all, no preservations
+                              sharing  — strip EXIF/GPS; preserve orientation & color profile
+                              archive  — strip GPS only; preserve copyright, orientation, color profile
 
 FIELD CONTROL
   --preserve-orientation      Keep EXIF orientation tag
@@ -209,6 +228,8 @@ INJECTION
   --inject-copyright <text>   Inject copyright string
   --inject-software <text>    Inject software string
   --inject-artist <text>      Inject artist string
+  --inject-description <text> Inject image description string
+  --inject-datetime <text>    Inject datetime ('YYYY:MM:DD HH:MM:SS')
 
 BATCH / DIRECTORY
   --concurrency <N>           Max parallel files (default: 4)
@@ -224,6 +245,11 @@ AUDIT REPORT
 
 WATCH MODE
   --watch <dir>               Watch for new files and process automatically
+
+CONFIG FILE
+  .hbscrubrc (JSON) is auto-loaded from the current working directory or $HOME.
+  CLI flags always override config file values.
+  Example: { "profile": "sharing", "outputFormat": "json", "concurrency": 8 }
 ```
 
 ### Common examples
@@ -252,6 +278,24 @@ hb-scrub photo.jpg --gps-redact city
 
 # Inject a copyright notice
 hb-scrub photo.jpg --inject-copyright "© 2026 Honey Badger Universe"
+
+# Inject a description and datetime
+hb-scrub photo.jpg --inject-description "Product shot" --inject-datetime "2026:01:15 12:00:00"
+
+# Apply the 'sharing' profile
+hb-scrub photo.jpg --profile sharing
+
+# Apply the 'archive' profile across a whole directory
+hb-scrub photos/ --recursive --profile archive
+
+# Verify no metadata remains in the output
+hb-scrub photo.jpg --verify
+
+# Output results as JSON for scripting
+hb-scrub photos/ --recursive --output-format json
+
+# Output results as CSV
+hb-scrub photos/ --recursive --output-format csv > results.csv
 
 # Process a whole directory, 8 files at a time
 hb-scrub photos/ --recursive --concurrency 8
@@ -413,6 +457,7 @@ const types = getMetadataTypes(imageBytes);
 | `hasIcc` | `boolean` | ICC color profile present |
 | `hasIptc` | `boolean` | IPTC block present |
 | `hasThumbnail` | `boolean` | Embedded thumbnail present |
+| `raw` | `Record<string, unknown>` | Raw IFD0 tag map (`ifd0:<tagNumber>` keys) — populated by `readMetadata` for TIFF-based formats |
 
 ---
 
@@ -437,6 +482,8 @@ const result = await removeMetadata(imageBytes, {
 | `'region'` | 1 | ≈ 11 km | City-level |
 | `'country'` | 0 | ≈ 111 km | Country-level |
 | `'remove'` | — | None | Full removal (default) |
+
+> **Altitude redaction**: GPS altitude (EXIF GPS tags 5 `GPSAltitudeRef` and 6 `GPSAltitude`) is always zeroed when GPS is removed or redacted at any level. This prevents altitude data from leaking even when coordinate precision is merely reduced.
 
 CLI equivalent:
 
@@ -468,6 +515,8 @@ CLI equivalents:
 hb-scrub photo.jpg --inject-copyright "© 2026 Honey Badger Universe"
 hb-scrub photo.jpg --inject-software  "HB_Scrub v1.1.0"
 hb-scrub photo.jpg --inject-artist    "James Temple"
+hb-scrub photo.jpg --inject-description "Product shot"
+hb-scrub photo.jpg --inject-datetime  "2026:01:15 12:00:00"
 ```
 
 ---
@@ -555,12 +604,28 @@ Confirm that no known metadata remains after scrubbing:
 ```typescript
 import { verifyClean } from 'hb-scrub';
 
-const { clean, remainingMetadata } = await verifyClean(cleanedBytes);
+const { clean, remainingMetadata, confidence } = await verifyClean(cleanedBytes);
 
 if (!clean) {
   console.warn('Residual metadata detected:', remainingMetadata);
   // e.g. ['ICC Profile']
 }
+
+console.log(confidence); // 'high' | 'medium' | 'low'
+```
+
+`confidence` reflects how thorough the verification is for a given format:
+
+| Confidence | Formats |
+|---|---|
+| `'high'` | JPEG, PNG, WebP, TIFF, HEIC, AVIF |
+| `'medium'` | GIF, PDF, MP4, MOV, DNG, RAW |
+| `'low'` | SVG and any unrecognised format |
+
+CLI:
+
+```bash
+hb-scrub photo.jpg --verify
 ```
 
 `verifyClean` runs `getMetadataTypes` on the cleaned output and reports any metadata types it can still detect. A `preserveColorProfile: true` run will typically report `['ICC Profile']` — this is expected.
@@ -684,7 +749,7 @@ try {
 | `removeMetadataSync` | `(input, options?) → RemoveResult` | Remove metadata sync |
 | `readMetadata` | `(input) → Promise<ReadResult>` | Read metadata async |
 | `readMetadataSync` | `(input) → ReadResult` | Read metadata sync |
-| `verifyClean` | `(input) → Promise<VerifyResult>` | Check no metadata remains async |
+| `verifyClean` | `(input) → Promise<VerifyResult>` | Check no metadata remains async; includes `confidence` score |
 | `verifyCleanSync` | `(input) → VerifyResult` | Sync version |
 | `getMetadataTypes` | `(input) → string[]` | List metadata type names present |
 | `detectFormat` | `(input) → SupportedFormat` | Detect file format |
@@ -714,6 +779,77 @@ try {
 | `keep` | `MetadataFieldName[]` | — | Always keep these fields |
 | `gpsRedact` | `GpsRedactPrecision` | `'remove'` | GPS handling |
 | `inject` | `MetadataInjectOptions` | — | Fields to write into cleaned output |
+
+---
+
+*Documentation for HB_Scrub v1.1.0 — © 2026 Honey Badger Universe*
+
+---
+
+## 16. Named Profiles
+
+Profiles are named presets that apply a bundle of `RemoveOptions` in a single flag. They are the quickest way to apply a sensible default policy.
+
+| Profile | Behaviour |
+|---|---|
+| `privacy` | Remove everything. No preservations. |
+| `sharing` | Remove EXIF and GPS; preserve orientation and color profile. |
+| `archive` | Remove GPS only; preserve copyright, orientation, and color profile. |
+
+### API
+
+```typescript
+import { applyProfile } from 'hb-scrub/cli'; // exported helper
+
+const opts = applyProfile('sharing', {});
+// opts.preserveOrientation === true
+// opts.preserveColorProfile === true
+// opts.remove includes GPS and EXIF
+```
+
+### CLI
+
+```bash
+hb-scrub photo.jpg --profile privacy
+hb-scrub photo.jpg --profile sharing
+hb-scrub photos/ --recursive --profile archive
+```
+
+Explicit flags always override the profile. For example, `--profile sharing --preserve-copyright` adds copyright preservation on top of the sharing preset.
+
+---
+
+## 17. Config File (.hbscrubrc)
+
+A `.hbscrubrc` JSON file is automatically loaded if found in:
+
+1. The **current working directory** (`process.cwd()/.hbscrubrc`)
+2. The **home directory** (`$HOME/.hbscrubrc`)
+
+CLI flags take precedence over config file values.
+
+### Supported keys
+
+```json
+{
+  "profile":       "sharing",
+  "outputFormat":  "json",
+  "concurrency":   8,
+  "recursive":     true,
+  "inPlace":       false,
+  "suffix":        "-clean",
+  "gpsRedact":     "city",
+  "dryRun":        false,
+  "quiet":         false,
+  "report":        "audit.json",
+  "inject": {
+    "copyright":   "© 2026 Honey Badger Universe",
+    "software":    "HB_Scrub v1.1.0"
+  }
+}
+```
+
+Any key that maps to a CLI flag is accepted. Unknown keys are silently ignored.
 
 ---
 

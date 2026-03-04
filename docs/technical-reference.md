@@ -341,6 +341,12 @@ interface MetadataMap {
   hasIcc:       boolean;
   hasIptc:      boolean;
   hasThumbnail: boolean;
+  /**
+   * Raw IFD0 tag map populated by readMetadata for TIFF-based formats.
+   * Keys are 'ifd0:<tagNumber>' (e.g. 'ifd0:271' for Make).
+   * Values are the raw tag value before structured parsing.
+   */
+  raw?: Record<string, unknown>;
 }
 ```
 
@@ -384,6 +390,14 @@ interface VerifyResult {
 
   /** Metadata types still detected (empty when clean). */
   remainingMetadata: string[];
+
+  /**
+   * How thorough the verification is for this format.
+   * 'high'   — JPEG, PNG, WebP, TIFF, HEIC, AVIF
+   * 'medium' — GIF, PDF, MP4, MOV, DNG, RAW
+   * 'low'    — SVG or unrecognised format
+   */
+  confidence: 'high' | 'medium' | 'low';
 }
 ```
 
@@ -831,10 +845,24 @@ The Electron entry point:
 2. Registers Chromium command-line switches to suppress VSync/DBus/GPU errors (`--disable-gpu-vsync`, `--log-level=3`)
 3. Spawns `dist/hb-scrub.gui.js` as a child Node.js process on port **3777**
 4. Polls `http://127.0.0.1:3777/` (up to 30 × 200 ms) until the server is ready
-5. Opens a `BrowserWindow` (1100 × 820, min 760 × 560) and loads `http://127.0.0.1:3777/`
-6. Kills the child server process on `will-quit`
+5. Opens a `BrowserWindow` (1100 × 820, min 760 × 560) with `webPreferences.preload` set to `electron/preload.cjs`, then loads `http://127.0.0.1:3777/`
+6. Handles `ipcMain.handle('open-files')` — opens a native `dialog.showOpenDialog`, reads selected files to base64, and returns them to the renderer
+7. Creates a system tray icon (`createTray()`) with a context menu that includes: Open, Watch Folder…, Stop Watching, Quit
+8. `startWatch(dir)` / `stopWatch()` — uses `fs.watch` on a selected directory; each new supported file is pushed to the renderer via `webContents.send('watch-file', { name, base64, mime })`
+9. Kills the child server process and stops the watcher on `will-quit`
 
-The GUI process (`dist/hb-scrub.gui.js`) is a standard Node.js HTTP server that serves an embedded single-page HTML application and exposes a JSON API at `/api/*`.
+### Preload bridge (`electron/preload.cjs`)
+
+Exposes a safe API to the renderer via `contextBridge`:
+
+```javascript
+window.electronAPI = {
+  openFiles:     () => ipcRenderer.invoke('open-files'),
+  onWatchFile:   (cb) => ipcRenderer.on('watch-file', (_event, payload) => cb(payload)),
+};
+```
+
+The renderer checks `if (window.electronAPI)` before using these — the GUI works identically in a plain browser tab when `window.electronAPI` is absent.
 
 ---
 
@@ -881,7 +909,7 @@ src/
   detect.ts             Format detection (detectFormat, getMimeType, …)
   signatures.ts         FILE_SIGNATURES magic byte constants
   errors.ts             Error class definitions
-  cli.ts                CLI entry point
+  cli.ts                CLI entry point (parseArgs, applyProfile, loadRcFile, PROFILES)
   gui.ts                Local web GUI (HTTP server + embedded HTML/CSS/JS)
   node.ts               Node.js file API (processFile, processDir, …)
   node-stream.ts        Node.js Transform stream (createScrubStream)
@@ -892,9 +920,9 @@ src/
     crc32.ts            IEEE 802.3 CRC-32 + PNG chunk CRC
 
   exif/
-    reader.ts           EXIF IFD parser → MetadataMap
+    reader.ts           EXIF IFD parser → MetadataMap (populates raw tag map)
     writer.ts           Minimal EXIF APP1 builder (for orientation re-injection)
-    gps.ts              GPS rational ↔ decimal conversion + redaction
+    gps.ts              GPS rational ↔ decimal conversion, redaction (incl. altitude)
 
   formats/
     jpeg.ts             JPEG segment scanner
@@ -912,11 +940,12 @@ src/
   operations/
     remove.ts           removeMetadata / removeMetadataSync implementation
     read.ts             readMetadata / readMetadataSync implementation
-    verify.ts           verifyClean / verifyCleanSync implementation
-    batch.ts            processDir / processFiles implementation
+    verify.ts           verifyClean / verifyCleanSync (incl. confidence scoring)
+    batch.ts            processDir / processFiles (incl. matchGlob)
 
 electron/
-  main.cjs              Electron main process — spawns GUI server, opens window
+  main.cjs              Electron main process — spawns GUI server, IPC, Tray, watch
+  preload.cjs           contextBridge: exposes electronAPI to renderer
 ```
 
 ---

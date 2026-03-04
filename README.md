@@ -10,12 +10,16 @@ No re-encoding. No quality loss. Zero runtime dependencies.
 
 - **13 formats** — JPEG, PNG, WebP, GIF, SVG, TIFF, HEIC/HEIF, AVIF, PDF, MP4/MOV, DNG, RAW (CR2, NEF, ARW)
 - **Works everywhere** — browser, Node.js, Deno, Bun, and any bundler
-- **Standalone desktop app** — Electron GUI for drag-and-drop use, no terminal required
+- **Standalone desktop app** — Electron GUI with native file dialog, system tray, watch-folder, and clipboard paste
 - **Binary manipulation** — metadata stripped at the byte level; pixels are never touched
 - **Read metadata** — inspect what's inside a file before removing anything
-- **GPS redaction** — truncate coordinates to city/region/country precision instead of stripping
-- **Metadata injection** — write a clean copyright, software, or artist field into the output
+- **GPS redaction** — truncate coordinates (and altitude) to city/region/country precision instead of stripping
+- **Metadata injection** — write a clean copyright, software, artist, description, or datetime field into the output
+- **Named profiles** — `privacy`, `sharing`, and `archive` presets apply sensible field-control defaults in one flag
+- **Config file** — `.hbscrubrc` JSON file auto-loaded from the project or home directory
 - **Field-level control** — remove only specific fields, or explicitly keep a named subset
+- **Verify mode** — confirm no metadata remains; includes format confidence score
+- **Structured CLI output** — `--output-format table|json|csv` for scripting and dashboards
 - **Batch processing** — process entire directories with concurrency and audit reports (Node.js)
 - **Stream API** — pipe files through a Node.js Transform stream
 - **Sync and async APIs**
@@ -93,6 +97,19 @@ npm install
 npm run electron
 ```
 
+### Desktop App features
+
+| Feature | Description |
+|---|---|
+| Drag & Drop | Drop files directly onto the window |
+| Native File Dialog | "Browse Files" button opens a native OS file picker (Cmd/Ctrl+O) |
+| Clipboard Paste | Paste image files directly from the clipboard (Ctrl+V / Cmd+V) |
+| System Tray | App stays in the system tray when the window is closed |
+| Watch Folder | Select a directory via the tray menu; new files are automatically cleaned |
+| Before/After Diff | After scrubbing, removed metadata types are shown as struck-through text |
+| ZIP Download | Download all cleaned files at once as a single `hb-scrub-clean.zip` |
+| Persistent Settings | Preserve options are saved to `localStorage` and restored on relaunch |
+
 To build a distributable package for your platform:
 
 ```bash
@@ -135,6 +152,17 @@ BASIC
 
 METADATA INSPECTION
   --inspect                   Read and display metadata (no removal)
+  --verify                    Verify the output contains no metadata
+
+OUTPUT FORMAT
+  --output-format <fmt>       table (default) | json | csv
+                              Controls how results are printed to stdout
+
+PROFILES
+  --profile <name>            Apply a preset: privacy | sharing | archive
+                              privacy  — strip all, preserve nothing
+                              sharing  — strip EXIF/GPS; preserve orientation & color profile
+                              archive  — strip GPS only; preserve copyright, orientation, color profile
 
 FIELD CONTROL
   --preserve-orientation      Keep EXIF orientation tag
@@ -152,6 +180,8 @@ INJECTION
   --inject-copyright <text>   Inject copyright string into output
   --inject-software <text>    Inject software string into output
   --inject-artist <text>      Inject artist string into output
+  --inject-description <text> Inject image description into output
+  --inject-datetime <text>    Inject datetime string ('YYYY:MM:DD HH:MM:SS')
 
 BATCH / DIRECTORY
   --concurrency <N>           Max parallel files (default: 4)
@@ -167,6 +197,11 @@ AUDIT REPORT
 
 WATCH MODE
   --watch <dir>               Watch directory for new files and process them
+
+CONFIG FILE
+  .hbscrubrc (JSON) is auto-loaded from the current working directory or $HOME.
+  CLI flags override config file values.
+  Example: { "profile": "sharing", "outputFormat": "json" }
 ```
 
 ### Examples
@@ -195,6 +230,18 @@ hb-scrub photo.jpg --keep "Copyright,ICC Profile"
 
 # Inject a copyright notice after stripping
 hb-scrub photo.jpg --inject-copyright "© 2026 Honey Badger Universe"
+
+# Inject a description and datetime
+hb-scrub photo.jpg --inject-description "Product shot" --inject-datetime "2026:01:15 12:00:00"
+
+# Apply the 'sharing' profile (strips EXIF/GPS, keeps orientation & color profile)
+hb-scrub photo.jpg --profile sharing
+
+# Verify the cleaned output contains no residual metadata
+hb-scrub photo.jpg --verify
+
+# Output results as JSON for scripting
+hb-scrub photos/ --recursive --output-format json
 
 # Process a directory, 8 files at a time, write an audit report
 hb-scrub photos/ --recursive --concurrency 8 --report audit.json
@@ -251,6 +298,8 @@ const result = await removeMetadata(imageBytes, {
 | `'country'` | 0 | ≈ 111 km |
 | `'remove'` | — | Stripped entirely (default) |
 
+> **Altitude redaction**: GPS altitude (EXIF GPS tags 5 and 6) is always zeroed whenever GPS data is removed or redacted, regardless of the `gpsRedact` level.
+
 ---
 
 ## Metadata Injection
@@ -258,9 +307,11 @@ const result = await removeMetadata(imageBytes, {
 ```typescript
 const result = await removeMetadata(imageBytes, {
   inject: {
-    copyright: '© 2026 Honey Badger Universe',
-    software:  'HB_Scrub v1.1.0',
-    artist:    'James Temple',
+    copyright:        '© 2026 Honey Badger Universe',
+    software:         'HB_Scrub v1.1.0',
+    artist:           'James Temple',
+    imageDescription: 'Product photo — cleaned',
+    dateTime:         '2026:01:15 12:00:00',
   },
 });
 ```
@@ -289,11 +340,18 @@ console.log(metadata.exif?.iso);      // 400
 ```typescript
 import { verifyClean } from 'hb-scrub';
 
-const { clean, remainingMetadata } = await verifyClean(cleanedBytes);
+const { clean, remainingMetadata, confidence } = await verifyClean(cleanedBytes);
+// confidence: 'high' | 'medium' | 'low' — reflects how thorough the check is for this format
 if (!clean) {
   console.warn('Residual metadata found:', remainingMetadata);
 }
 ```
+
+| Confidence | Formats |
+|---|---|
+| `'high'` | JPEG, PNG, WebP, TIFF, HEIC, AVIF |
+| `'medium'` | GIF, PDF, MP4, MOV, DNG, RAW |
+| `'low'` | SVG and any unrecognised format |
 
 ---
 
@@ -377,7 +435,7 @@ Error classes: `HbScrubError` (base), `InvalidFormatError`, `CorruptedFileError`
 | `removeMetadataSync(input, options?)` | `RemoveResult` | Strip metadata synchronously |
 | `readMetadata(input)` | `Promise<ReadResult>` | Read structured metadata without modifying |
 | `readMetadataSync(input)` | `ReadResult` | Sync version |
-| `verifyClean(input)` | `Promise<VerifyResult>` | Confirm no metadata remains |
+| `verifyClean(input)` | `Promise<VerifyResult>` | Confirm no metadata remains; includes `confidence` score |
 | `verifyCleanSync(input)` | `VerifyResult` | Sync version |
 | `getMetadataTypes(input)` | `string[]` | List metadata type names present |
 | `detectFormat(input)` | `SupportedFormat` | Detect image format |
