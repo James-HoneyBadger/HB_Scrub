@@ -54,6 +54,21 @@ const checkers: Partial<
   mov: mp4,
 };
 
+/** Formats with thorough metadata coverage (high confidence). */
+const HIGH_CONFIDENCE_FORMATS = new Set<SupportedFormat>([
+  'jpeg', 'png', 'webp', 'tiff', 'heic', 'avif',
+]);
+/** Formats with partial coverage (medium confidence). */
+const MEDIUM_CONFIDENCE_FORMATS = new Set<SupportedFormat>([
+  'gif', 'pdf', 'mp4', 'mov', 'dng', 'raw',
+]);
+
+function getConfidence(format: SupportedFormat): 'high' | 'medium' | 'low' {
+  if (HIGH_CONFIDENCE_FORMATS.has(format)) return 'high';
+  if (MEDIUM_CONFIDENCE_FORMATS.has(format)) return 'medium';
+  return 'low';
+}
+
 /**
  * Verify that a cleaned buffer contains no detectable metadata.
  *
@@ -70,6 +85,7 @@ export function verifyCleanSync(input: Uint8Array | ArrayBuffer | string): Verif
     clean: remainingMetadata.length === 0,
     format,
     remainingMetadata,
+    confidence: getConfidence(format),
   };
 }
 

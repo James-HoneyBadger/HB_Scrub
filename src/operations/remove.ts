@@ -21,6 +21,7 @@ import {
   buildRedactedGpsExif,
   wrapInJpegApp1,
 } from '../exif/writer.js';
+import { crc32Png } from '../binary/crc32.js';
 
 /**
  * Format handler interface
@@ -154,8 +155,8 @@ function injectIntoPng(data: Uint8Array, rawTiff: Uint8Array): Uint8Array {
   view.setUint32(0, length, false);
   chunk.set(chunkType, 4);
   chunk.set(rawTiff, 8);
-  // CRC is skipped; most readers tolerate zero CRC on eXIf
-  view.setUint32(8 + length, 0, false);
+  // Compute correct CRC32 over chunk type + data
+  view.setUint32(8 + length, crc32Png(chunkType, rawTiff), false);
 
   // Insert before IEND chunk (last 12 bytes of a valid PNG)
   const insertAt = data.length - 12;
@@ -201,6 +202,10 @@ function processRemoval(data: Uint8Array, rawOptions: RemoveOptions): RemoveResu
           }
           const marker = data[i + 1] ?? 0;
           const segLen = ((data[i + 2] ?? 0) << 8) | (data[i + 3] ?? 0);
+          // Guard against zero-length segments causing an infinite loop
+          if (segLen < 2) {
+            break;
+          }
           if (marker === 0xe1) {
             const tag = String.fromCharCode(
               data[i + 4] ?? 0,

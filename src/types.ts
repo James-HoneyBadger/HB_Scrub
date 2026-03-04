@@ -196,6 +196,13 @@ export interface VerifyResult {
   format: SupportedFormat;
   /** Metadata type names still present (empty when `clean` is `true`). */
   remainingMetadata: string[];
+  /**
+   * Confidence level of the result.
+   * - `'high'`   — format with complete metadata parsing (JPEG, PNG, WebP, TIFF, HEIC, AVIF)
+   * - `'medium'` — format with partial parsing (GIF, PDF, MP4/MOV, DNG, RAW)
+   * - `'low'`    — format where hidden metadata may exist beyond what we can detect (SVG, unknown)
+   */
+  confidence: 'high' | 'medium' | 'low';
 }
 
 /**

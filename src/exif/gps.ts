@@ -100,24 +100,45 @@ export function redactGpsInExif(
       }
 
       const tag = dataview.readUint16(exifData, entryOffset, le);
+
       // GPSLatitude (2) | GPSLongitude (4): type RATIONAL(5), count 3
-      if (tag !== 2 && tag !== 4) {
+      if (tag === 2 || tag === 4) {
+        const type = dataview.readUint16(exifData, entryOffset + 2, le);
+        const count = dataview.readUint32(exifData, entryOffset + 4, le);
+        if (type !== 5 || count !== 3) {
+          continue;
+        }
+        const valueOffset = dataview.readUint32(exifData, entryOffset + 8, le);
+        if (valueOffset + 24 > exifData.length) {
+          continue;
+        }
+        const decimal = dmsRawToDecimal(exifData, valueOffset, le);
+        writeRedactedDms(exifData, valueOffset, decimal, decimals, le);
         continue;
       }
 
-      const type = dataview.readUint16(exifData, entryOffset + 2, le);
-      const count = dataview.readUint32(exifData, entryOffset + 4, le);
-      if (type !== 5 || count !== 3) {
+      // GPSAltitude (6): RATIONAL(5), count 1 — zero it out
+      if (tag === 6) {
+        const type = dataview.readUint16(exifData, entryOffset + 2, le);
+        const count = dataview.readUint32(exifData, entryOffset + 4, le);
+        if (type !== 5 || count !== 1) {
+          continue;
+        }
+        const valueOffset = dataview.readUint32(exifData, entryOffset + 8, le);
+        if (valueOffset + 8 > exifData.length) {
+          continue;
+        }
+        // Write 0/1 rational
+        dataview.writeUint32(exifData, valueOffset, 0, le);
+        dataview.writeUint32(exifData, valueOffset + 4, 1, le);
         continue;
       }
 
-      const valueOffset = dataview.readUint32(exifData, entryOffset + 8, le);
-      if (valueOffset + 24 > exifData.length) {
-        continue;
+      // GPSAltitudeRef (5): BYTE, count 1 — zero it out (0 = above sea level)
+      if (tag === 5) {
+        // Inline single byte — zero the value field
+        dataview.writeUint32(exifData, entryOffset + 8, 0, le);
       }
-
-      const decimal = dmsRawToDecimal(exifData, valueOffset, le);
-      writeRedactedDms(exifData, valueOffset, decimal, decimals, le);
     }
   } catch {
     // Ignore malformed GPS IFD

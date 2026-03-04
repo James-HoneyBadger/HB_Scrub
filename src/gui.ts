@@ -5,6 +5,7 @@
  */
 
 import * as http from 'node:http';
+import { fileURLToPath } from 'node:url';
 import {
   removeMetadataSync,
   readMetadataSync,
@@ -257,9 +258,66 @@ const HTML = `<!DOCTYPE html>
     const progBar    = $('prog-bar');
     const toast      = $('toast');
 
-    // File registry: id -> { file, status, result, format, metadataTypes }
+    // File registry: id -> { file, status, result, resultName, format, metadataTypes, removedTypes }
     const files = new Map();
     let nextId = 0;
+
+    // ── localStorage option persistence (#10) ────────────────────────────
+    const OPT_IDS = ['opt-color', 'opt-copyright', 'opt-orientation', 'opt-title', 'opt-description'];
+    const RC_KEY = 'hbscrub-options';
+
+    function saveOptions() {
+      try {
+        const state = {};
+        OPT_IDS.forEach(id => { state[id] = $(id).checked; });
+        state['opt-gps'] = $('opt-gps').value;
+        localStorage.setItem(RC_KEY, JSON.stringify(state));
+      } catch(e) { /* storage unavailable */ }
+    }
+
+    function loadOptions() {
+      try {
+        const raw = localStorage.getItem(RC_KEY);
+        if (!raw) return;
+        const state = JSON.parse(raw);
+        OPT_IDS.forEach(id => { if (id in state) $(id).checked = state[id]; });
+        if ('opt-gps' in state) $('opt-gps').value = state['opt-gps'];
+      } catch(e) { /* ignore */ }
+    }
+
+    // Attach change listeners to persist on every change
+    OPT_IDS.forEach(id => $(id).addEventListener('change', saveOptions));
+    $('opt-gps').addEventListener('change', saveOptions);
+    loadOptions();
+
+    // ── Electron integration (#14 + #15) ─────────────────────────────────
+    if (window.electronAPI) {
+      // Expose triggers so main process File menu & tray can call us
+      window._electronOpenFiles = async function() {
+        const nativeFiles = await window.electronAPI.openFiles();
+        if (!nativeFiles || !nativeFiles.length) return;
+        addFiles(nativeFiles.map(f => {
+          const bytes = Uint8Array.from(atob(f.data), c => c.charCodeAt(0));
+          return new File([bytes], f.name);
+        }));
+      };
+      window._showToast = (msg, type) => showToast(msg, type);
+
+      // Listen for files pushed by the watch-folder feature
+      window.electronAPI.onWatchFile(f => {
+        const bytes = Uint8Array.from(atob(f.data), c => c.charCodeAt(0));
+        addFiles([new File([bytes], f.name)]);
+        showToast('Watch: ' + f.name + ' added', '');
+      });
+
+      // Inject a "Browse Files" button next to the drop-zone
+      const browseBtn = document.createElement('button');
+      browseBtn.className = 'btn-secondary';
+      browseBtn.style.cssText = 'margin-top:0.75rem;';
+      browseBtn.textContent = '📂 Browse Files';
+      browseBtn.addEventListener('click', window._electronOpenFiles);
+      dropZone.appendChild(browseBtn);
+    }
 
     // ── Supported formats ─────────────────────────────────────────────────
     fetch('/api/formats').then(r => r.json()).then(fmts => {
@@ -283,11 +341,21 @@ const HTML = `<!DOCTYPE html>
     });
     fileInput.addEventListener('change', () => addFiles(Array.from(fileInput.files)));
 
+    // ── Paste from clipboard (#11) ────────────────────────────────────────
+    document.addEventListener('paste', e => {
+      const items = e.clipboardData && e.clipboardData.files;
+      if (items && items.length > 0) {
+        e.preventDefault();
+        addFiles(Array.from(items));
+        showToast(items.length + ' file(s) pasted from clipboard', '');
+      }
+    });
+
     // ── Add files ─────────────────────────────────────────────────────────
     function addFiles(fileList) {
       fileList.forEach(f => {
         const id = nextId++;
-        files.set(id, { file: f, status: 'pending', result: null, format: '…', metadataTypes: [] });
+        files.set(id, { file: f, status: 'pending', result: null, format: '…', metadataTypes: [], removedTypes: [] });
         appendRow(id);
         readMeta(id);
       });
@@ -335,20 +403,42 @@ const HTML = `<!DOCTYPE html>
         const fmtEl = $('fmt-' + id);
         if (fmtEl) fmtEl.textContent = entry.format.toUpperCase();
 
-        const metaEl = $('meta-' + id);
-        if (metaEl) {
-          if (entry.metadataTypes.length === 0) {
-            metaEl.innerHTML = '<span style="color:var(--green);font-size:0.75rem">✓ Clean</span>';
-          } else {
-            metaEl.innerHTML = entry.metadataTypes
-              .map(t => \`<span class="meta-tag">\${t}</span>\`)
-              .join('');
-          }
-        }
+        renderMetaTags(id);
       } catch(e) {
         const metaEl = $('meta-' + id);
         if (metaEl) metaEl.innerHTML = '<span class="badge badge-error">Error</span>';
       }
+    }
+
+    // ── Before/after diff rendering (#12) ────────────────────────────────
+    function renderMetaTags(id) {
+      const entry = files.get(id);
+      if (!entry) return;
+      const metaEl = $('meta-' + id);
+      if (!metaEl) return;
+
+      if (entry.metadataTypes.length === 0 && entry.removedTypes.length === 0) {
+        metaEl.innerHTML = '<span style="color:var(--green);font-size:0.75rem">✓ Clean</span>';
+        return;
+      }
+
+      // Build diff: types in removedTypes are shown as strikethrough (removed)
+      // types still in metadataTypes (not removed) shown normally
+      const removedSet = new Set(entry.removedTypes);
+      let html = '';
+      const allTypes = [...new Set([...entry.metadataTypes, ...entry.removedTypes])];
+      if (allTypes.length === 0) {
+        metaEl.innerHTML = '<span style="color:var(--green);font-size:0.75rem">✓ Clean</span>';
+        return;
+      }
+      for (const t of allTypes) {
+        if (removedSet.has(t)) {
+          html += \`<span class="meta-tag" style="text-decoration:line-through;opacity:0.45" title="removed">\${t}</span>\`;
+        } else {
+          html += \`<span class="meta-tag">\${t}</span>\`;
+        }
+      }
+      metaEl.innerHTML = html;
     }
 
     // ── Scrub all ─────────────────────────────────────────────────────────
@@ -375,8 +465,12 @@ const HTML = `<!DOCTYPE html>
           entry.status = 'done';
           entry.result = json.data;
           entry.resultName = json.name;
+          entry.removedTypes = json.removed || [];
+          // After scrub, remaining metadata is empty (clean)
+          entry.metadataTypes = [];
 
           setStatus(id, 'done', 'Clean');
+          renderMetaTags(id);
           const actionEl = $('action-' + id);
           if (actionEl) {
             actionEl.innerHTML = \`<button class="btn-dl" onclick="downloadFile(\${id})">⬇ Download</button>\`;
@@ -409,10 +503,126 @@ const HTML = `<!DOCTYPE html>
       URL.revokeObjectURL(a.href);
     };
 
+    // ── ZIP download all (#13) ────────────────────────────────────────────
+    function buildZip(fileEntries) {
+      // Simple ZIP with STORE (no compression) — no external dependencies
+      const enc = s => new TextEncoder().encode(s);
+      const u32le = n => new Uint8Array([n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff, (n >> 24) & 0xff]);
+      const u16le = n => new Uint8Array([n & 0xff, (n >> 8) & 0xff]);
+
+      const localHeaders = [];
+      const centralDirs  = [];
+      let offset = 0;
+
+      for (const { name, data } of fileEntries) {
+        const nameBytes  = enc(name);
+        const crc        = crc32(data);
+        const size       = data.length;
+
+        const local = [
+          new Uint8Array([0x50, 0x4b, 0x03, 0x04]), // local file header sig
+          u16le(20),          // version needed
+          u16le(0),           // general purpose bit flag
+          u16le(0),           // compression method: STORE
+          u16le(0),           // last mod time
+          u16le(0),           // last mod date
+          u32le(crc),         // crc-32
+          u32le(size),        // compressed size
+          u32le(size),        // uncompressed size
+          u16le(nameBytes.length),
+          u16le(0),           // extra field length
+          nameBytes,
+          data,
+        ];
+
+        const central = [
+          new Uint8Array([0x50, 0x4b, 0x01, 0x02]), // central dir sig
+          u16le(20),          // version made by
+          u16le(20),          // version needed
+          u16le(0),           // general purpose bit flag
+          u16le(0),           // compression method: STORE
+          u16le(0),           // last mod time
+          u16le(0),           // last mod date
+          u32le(crc),
+          u32le(size),
+          u32le(size),
+          u16le(nameBytes.length),
+          u16le(0),           // extra field length
+          u16le(0),           // file comment length
+          u16le(0),           // disk number start
+          u16le(0),           // internal file attributes
+          u32le(0),           // external file attributes
+          u32le(offset),      // relative offset of local header
+          nameBytes,
+        ];
+
+        const localBytes = concat(...local);
+        localHeaders.push(localBytes);
+        centralDirs.push(concat(...central));
+        offset += localBytes.length;
+      }
+
+      const centralStart = offset;
+      const centralData  = concat(...centralDirs);
+      const eocd = [
+        new Uint8Array([0x50, 0x4b, 0x05, 0x06]), // end of central dir sig
+        u16le(0), u16le(0),                        // disk numbers
+        u16le(fileEntries.length),                 // entries on disk
+        u16le(fileEntries.length),                 // total entries
+        u32le(centralData.length),                 // size of central dir
+        u32le(centralStart),                       // offset of central dir
+        u16le(0),                                  // comment length
+      ];
+
+      return concat(...localHeaders, centralData, ...eocd);
+    }
+
+    function crc32(buf) {
+      // CRC32 table (IEEE polynomial)
+      if (!crc32._t) {
+        crc32._t = new Uint32Array(256);
+        for (let i = 0; i < 256; i++) {
+          let c = i;
+          for (let j = 0; j < 8; j++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+          crc32._t[i] = c;
+        }
+      }
+      let c = 0xffffffff;
+      for (let i = 0; i < buf.length; i++) c = crc32._t[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+      return (c ^ 0xffffffff) >>> 0;
+    }
+
+    function concat(...arrays) {
+      const total = arrays.reduce((s, a) => s + a.length, 0);
+      const out = new Uint8Array(total);
+      let off = 0;
+      for (const a of arrays) { out.set(a, off); off += a.length; }
+      return out;
+    }
+
     btnDlAll.addEventListener('click', () => {
-      [...files.entries()]
-        .filter(([,e]) => e.status === 'done')
-        .forEach(([id]) => downloadFile(id));
+      const done = [...files.entries()].filter(([,e]) => e.status === 'done');
+      if (done.length === 0) return;
+
+      if (done.length === 1) {
+        // Single file — no need for a ZIP
+        downloadFile(done[0][0]);
+        return;
+      }
+
+      const entries = done.map(([,e]) => ({
+        name: e.resultName || e.file.name,
+        data: Uint8Array.from(atob(e.result), c => c.charCodeAt(0)),
+      }));
+
+      const zip = buildZip(entries);
+      const blob = new Blob([zip], { type: 'application/zip' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'hb-scrub-clean.zip';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      showToast(done.length + ' files bundled into ZIP', 'success');
     });
 
     // ── Clear ─────────────────────────────────────────────────────────────
@@ -430,7 +640,7 @@ const HTML = `<!DOCTYPE html>
         preserveOrientation:   $('opt-orientation').checked,
         preserveTitle:         $('opt-title').checked,
         preserveDescription:   $('opt-description').checked,
-        gpsRedactPrecision:    $('opt-gps').value,
+        gpsRedact:             $('opt-gps').value,
       };
     }
 
@@ -478,7 +688,7 @@ const HTML = `<!DOCTYPE html>
 
 // ─── HTTP Server ─────────────────────────────────────────────────────────────
 
-function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+export function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   const parsedUrl = new URL(req.url ?? '/', 'http://localhost');
   const pathname = parsedUrl.pathname;
 
@@ -553,7 +763,7 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   res.end('Not found');
 }
 
-function buildOutputName(original: string): string {
+export function buildOutputName(original: string): string {
   const dot = original.lastIndexOf('.');
   if (dot === -1) {
     return original + '_clean';
@@ -563,10 +773,13 @@ function buildOutputName(original: string): string {
 
 // ─── Start ───────────────────────────────────────────────────────────────────
 
-const server = http.createServer(handleRequest);
-server.listen(PORT, '127.0.0.1', () => {
-  const addr = `http://localhost:${PORT}`;
-  console.log(`\n  🛡  HB Scrub GUI is running at ${addr}\n`);
-  console.log(`  Open ${addr} in your browser.\n`);
-  console.log('  Press Ctrl+C to stop.\n');
-});
+// Only auto-start the server when executed directly (not imported by tests)
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const server = http.createServer(handleRequest);
+  server.listen(PORT, '127.0.0.1', () => {
+    const addr = `http://localhost:${PORT}`;
+    console.log(`\n  🛡  HB Scrub GUI is running at ${addr}\n`);
+    console.log(`  Open ${addr} in your browser.\n`);
+    console.log('  Press Ctrl+C to stop.\n');
+  });
+}

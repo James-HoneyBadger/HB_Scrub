@@ -11,17 +11,22 @@
  *  • Backup originals before in-place overwrite
  *  • Field-level remove / keep allowlist/denylist
  *  • GPS precision redaction
- *  • Metadata injection (copyright, software, artist, …)
+ *  • Metadata injection (copyright, software, artist, description, datetime)
  *  • Inspect mode: read & display metadata without removing
+ *  • Verify mode: confirm output is metadata-free
+ *  • Named profiles: privacy, sharing, archive
+ *  • .hbscrubrc config file support
  */
 
-import { readFileSync, watch } from 'node:fs';
+import { readFileSync, watch, existsSync } from 'node:fs';
 import { readFile, writeFile, copyFile, mkdir, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve, basename } from 'node:path';
+import { homedir } from 'node:os';
 import { processFile } from './node.js';
 import { processDir } from './operations/batch.js';
 import { readMetadata } from './operations/read.js';
+import { verifyCleanSync } from './operations/verify.js';
 import type { ProcessFileOptions } from './node.js';
 import type {
   BatchOptions,
@@ -134,6 +139,7 @@ BASIC
 
 METADATA INSPECTION
   --inspect                   Read and display metadata (no removal)
+  --verify                    After scrubbing, re-verify output is clean
 
 FIELD CONTROL
   --preserve-orientation      Keep EXIF orientation tag
@@ -152,6 +158,14 @@ INJECTION
   --inject-copyright <text>   Inject copyright string into output
   --inject-software <text>    Inject software string into output
   --inject-artist <text>      Inject artist string into output
+  --inject-description <text> Inject image description into output
+  --inject-datetime <text>    Inject date/time into output (ISO 8601 or TIFF format)
+
+PROFILES (shorthand option sets)
+  --profile privacy           Strip GPS, device info, software; keep orientation + ICC
+  --profile sharing           Strip GPS & device info; keep orientation, ICC, copyright
+  --profile archive           Keep orientation, ICC, copyright, title, description;
+                              remove only GPS and software
 
 BATCH / DIRECTORY
   --concurrency <N>           Max parallel files (default: 4)
@@ -165,9 +179,14 @@ STDIN / STDOUT
 
 AUDIT REPORT
   --report <file.json>        Write JSON audit report to file
+  --output-format <fmt>       Output format: table (default) | json | csv
 
 WATCH MODE
   --watch <dir>               Watch directory for new files and process them
+
+CONFIG FILE
+  Options are also loaded from .hbscrubrc (JSON) in the current directory
+  or home directory. CLI flags take precedence.
 `.trim();
 
 // ─── Argument parser ──────────────────────────────────────────────────────────
@@ -180,6 +199,7 @@ interface CliArgs {
   recursive: boolean;
   quiet: boolean;
   inspect: boolean;
+  verify: boolean;
   preserveOrientation: boolean;
   preserveColorProfile: boolean;
   preserveCopyright: boolean;
@@ -189,27 +209,33 @@ interface CliArgs {
   injectCopyright?: string;
   injectSoftware?: string;
   injectArtist?: string;
+  injectDescription?: string;
+  injectDatetime?: string;
   concurrency: number;
   dryRun: boolean;
   skipExisting: boolean;
   backup?: string;
   report?: string;
   watchDir?: string;
+  outputFormat: 'table' | 'json' | 'csv';
+  profile?: 'privacy' | 'sharing' | 'archive';
 }
 
-function parseArgs(raw: string[]): CliArgs {
+export function parseArgs(raw: string[]): CliArgs {
   const args: CliArgs = {
     files: [],
     inPlace: false,
     recursive: false,
     quiet: false,
     inspect: false,
+    verify: false,
     preserveOrientation: false,
     preserveColorProfile: false,
     preserveCopyright: false,
     concurrency: 4,
     dryRun: false,
     skipExisting: false,
+    outputFormat: 'table',
   };
 
   const take = (i: number, flag: string, rawArr: string[]): [number, string] => {
@@ -238,6 +264,9 @@ function parseArgs(raw: string[]): CliArgs {
         break;
       case '--inspect':
         args.inspect = true;
+        break;
+      case '--verify':
+        args.verify = true;
         break;
       case '--preserve-orientation':
         args.preserveOrientation = true;
@@ -310,6 +339,18 @@ function parseArgs(raw: string[]): CliArgs {
         args.injectArtist = v;
         break;
       }
+      case '--inject-description': {
+        const [ni, v] = take(i, a, raw);
+        i = ni;
+        args.injectDescription = v;
+        break;
+      }
+      case '--inject-datetime': {
+        const [ni, v] = take(i, a, raw);
+        i = ni;
+        args.injectDatetime = v;
+        break;
+      }
       case '--concurrency': {
         const [ni, v] = take(i, a, raw);
         i = ni;
@@ -337,6 +378,28 @@ function parseArgs(raw: string[]): CliArgs {
         const [ni, v] = take(i, a, raw);
         i = ni;
         args.watchDir = v;
+        break;
+      }
+      case '--output-format': {
+        const [ni, v] = take(i, a, raw);
+        i = ni;
+        const allowed = ['table', 'json', 'csv'];
+        if (!allowed.includes(v)) {
+          console.error(`Error: --output-format must be one of: ${allowed.join(', ')}`);
+          process.exit(1);
+        }
+        args.outputFormat = v as CliArgs['outputFormat'];
+        break;
+      }
+      case '--profile': {
+        const [ni, v] = take(i, a, raw);
+        i = ni;
+        const allowed = ['privacy', 'sharing', 'archive'];
+        if (!allowed.includes(v)) {
+          console.error(`Error: --profile must be one of: ${allowed.join(', ')}`);
+          process.exit(1);
+        }
+        args.profile = v as NonNullable<CliArgs['profile']>;
         break;
       }
       default:
@@ -422,9 +485,77 @@ async function classifyInputs(inputs: string[]): Promise<{ files: string[]; dirs
   return { files, dirs };
 }
 
+// ─── Profile presets ──────────────────────────────────────────────────────────
+
+export const PROFILES: Record<string, Partial<CliArgs>> = {
+  privacy: {
+    preserveOrientation: true,
+    preserveColorProfile: true,
+    keep: ['Orientation', 'ICC Profile'],
+  },
+  sharing: {
+    preserveOrientation: true,
+    preserveColorProfile: true,
+    preserveCopyright: true,
+    keep: ['Orientation', 'ICC Profile', 'Copyright'],
+  },
+  archive: {
+    preserveOrientation: true,
+    preserveColorProfile: true,
+    preserveCopyright: true,
+    keep: ['Orientation', 'ICC Profile', 'Copyright', 'Title', 'Description'],
+    remove: ['GPS', 'Software'],
+  },
+};
+
+export function applyProfile(args: CliArgs): CliArgs {
+  if (!args.profile) {
+    return args;
+  }
+  const preset = PROFILES[args.profile];
+  if (!preset) {
+    return args;
+  }
+  // Profile sets base; explicit CLI flags override
+  return { ...args, ...preset, profile: args.profile } as CliArgs;
+}
+
+// ─── .hbscrubrc config loader ─────────────────────────────────────────────────
+
+export function loadRcFile(): string[] {
+  const candidates = [
+    join(process.cwd(), '.hbscrubrc'),
+    join(homedir(), '.hbscrubrc'),
+  ];
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) {
+      continue;
+    }
+    try {
+      const raw = JSON.parse(readFileSync(candidate, 'utf-8')) as Record<string, unknown>;
+      const extra: string[] = [];
+      for (const [key, val] of Object.entries(raw)) {
+        const flag = '--' + key;
+        if (val === true) {
+          extra.push(flag);
+        } else if (val === false || val === null || val === undefined) {
+          // skip falsy booleans
+        } else {
+          extra.push(flag, String(val));
+        }
+      }
+      return extra;
+    } catch {
+      // ignore malformed rc file
+    }
+    break;
+  }
+  return [];
+}
+
 // ─── Build shared options ─────────────────────────────────────────────────────
 
-function buildOptions(a: CliArgs): ProcessFileOptions & BatchOptions {
+export function buildOptions(a: CliArgs): ProcessFileOptions & BatchOptions {
   const opts: ProcessFileOptions & BatchOptions = {
     inPlace: a.inPlace,
     preserveOrientation: a.preserveOrientation,
@@ -443,22 +574,82 @@ function buildOptions(a: CliArgs): ProcessFileOptions & BatchOptions {
   if (
     a.injectCopyright !== undefined ||
     a.injectSoftware !== undefined ||
-    a.injectArtist !== undefined
+    a.injectArtist !== undefined ||
+    a.injectDescription !== undefined ||
+    a.injectDatetime !== undefined
   ) {
     opts.inject = {
       ...(a.injectCopyright !== undefined && { copyright: a.injectCopyright }),
       ...(a.injectSoftware !== undefined && { software: a.injectSoftware }),
       ...(a.injectArtist !== undefined && { artist: a.injectArtist }),
+      ...(a.injectDescription !== undefined && { imageDescription: a.injectDescription }),
+      ...(a.injectDatetime !== undefined && { dateTime: a.injectDatetime }),
     };
   }
 
   return opts;
 }
 
+// ─── Output formatters ────────────────────────────────────────────────────────
+
+export interface ProcessedEntry {
+  file: string;
+  output: string;
+  format: string;
+  original: number;
+  cleaned: number;
+  removed: string[];
+  error?: string | undefined;
+}
+
+export function printTable(entries: ProcessedEntry[], quiet: boolean): void {
+  if (quiet) return;
+  for (const e of entries) {
+    if (e.error) {
+      console.error(`  ✗ ${e.file}: ${e.error}`);
+    } else {
+      const meta = e.removed.length > 0 ? `removed ${e.removed.join(', ')}` : 'no metadata found';
+      console.log(`  ✓ ${e.file} → ${e.output} (${meta} | ${formatSize(e.original)} → ${formatSize(e.cleaned)})`);
+    }
+  }
+}
+
+export function printJson(entries: ProcessedEntry[]): void {
+  console.log(JSON.stringify(entries, null, 2));
+}
+
+export function printCsv(entries: ProcessedEntry[]): void {
+  console.log('file,output,format,original_bytes,cleaned_bytes,removed,error');
+  for (const e of entries) {
+    const row = [
+      `"${e.file}"`,
+      `"${e.output}"`,
+      e.format,
+      e.original,
+      e.cleaned,
+      `"${e.removed.join(';')}"`,
+      `"${e.error ?? ''}"`
+    ].join(',');
+    console.log(row);
+  }
+}
+
+export function printEntries(entries: ProcessedEntry[], fmt: CliArgs['outputFormat'], quiet: boolean): void {
+  if (fmt === 'json') {
+    printJson(entries);
+  } else if (fmt === 'csv') {
+    printCsv(entries);
+  } else {
+    printTable(entries, quiet);
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const rawArgs = process.argv.slice(2);
+  // Load rc file first; CLI flags override it
+  const rcArgs = loadRcFile();
+  const rawArgs = [...rcArgs, ...process.argv.slice(2)];
 
   if (rawArgs.length === 0 || rawArgs.includes('-h') || rawArgs.includes('--help')) {
     console.log(HELP);
@@ -469,7 +660,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const a = parseArgs(rawArgs);
+  const a = applyProfile(parseArgs(rawArgs));
   const baseOpts = buildOptions(a);
 
   // ── Watch mode ──
@@ -523,20 +714,44 @@ async function main(): Promise<void> {
     const batchResult = await processDir(dir, baseOpts, a.recursive);
     allReports.push(batchResult.report);
 
-    if (!a.quiet) {
-      for (const entry of batchResult.successful) {
-        if (a.dryRun) {
-          console.log(`  (dry) ${entry.file}`);
-        } else {
-          console.log(`  ✓ ${entry.file} → ${entry.outputPath ?? entry.file}`);
-        }
+    const dirEntries: ProcessedEntry[] = [];
+    for (const entry of batchResult.successful) {
+      dirEntries.push({
+        file: entry.file,
+        output: entry.outputPath ?? entry.file,
+        format: entry.format ?? '',
+        original: entry.originalSize ?? 0,
+        cleaned: entry.cleanedSize ?? 0,
+        removed: entry.removedMetadata ?? [],
+      });
+      if (a.verify && entry.outputPath && !a.dryRun) {
+        try {
+          const outData = new Uint8Array(await readFile(entry.outputPath));
+          const vr = verifyCleanSync(outData);
+          if (!vr.clean && !a.quiet) {
+            console.warn(`  ⚠ verify: ${entry.outputPath} still has [${vr.remainingMetadata.join(', ')}] (confidence: ${vr.confidence})`);
+            hasError = true;
+          }
+        } catch { /* skip verify on read error */ }
       }
-      for (const entry of batchResult.failed) {
-        console.error(`  ✗ ${entry.file}: ${entry.error}`);
-        hasError = true;
-      }
+    }
+    for (const entry of batchResult.failed) {
+      dirEntries.push({
+        file: entry.file,
+        output: '',
+        format: entry.format ?? '',
+        original: entry.originalSize ?? 0,
+        cleaned: 0,
+        removed: [],
+        error: entry.error,
+      });
+      hasError = true;
+    }
+
+    if (a.dryRun && !a.quiet) {
+      for (const e of dirEntries) console.log(`  (dry) ${e.file}`);
     } else {
-      hasError = hasError || batchResult.failed.length > 0;
+      printEntries(dirEntries, a.outputFormat, a.quiet);
     }
   }
 
@@ -545,6 +760,8 @@ async function main(): Promise<void> {
     console.error('Error: --output can only be used with a single input file');
     process.exit(1);
   }
+
+  const fileEntries: ProcessedEntry[] = [];
 
   for (const f of files) {
     try {
@@ -570,19 +787,42 @@ async function main(): Promise<void> {
 
       const result = await processFile(f, opts);
 
-      if (!a.quiet) {
-        const metaDesc =
-          result.removedMetadata.length > 0
-            ? `removed ${result.removedMetadata.join(', ')}`
-            : 'no metadata found';
-        const sizeDesc = `${formatSize(result.originalSize)} → ${formatSize(result.cleanedSize)}`;
-        console.log(`  ✓ ${f} → ${result.outputPath} (${metaDesc} | ${sizeDesc})`);
+      if (a.verify && result.outputPath) {
+        try {
+          const outData = new Uint8Array(await readFile(result.outputPath));
+          const vr = verifyCleanSync(outData);
+          if (!vr.clean) {
+            if (!a.quiet) {
+              console.warn(`  ⚠ verify: ${result.outputPath} still has [${vr.remainingMetadata.join(', ')}] (confidence: ${vr.confidence})`);
+            }
+            hasError = true;
+          }
+        } catch { /* skip verify on read error */ }
       }
+
+      fileEntries.push({
+        file: f,
+        output: result.outputPath ?? f,
+        format: result.format,
+        original: result.originalSize,
+        cleaned: result.cleanedSize,
+        removed: result.removedMetadata,
+      });
     } catch (err) {
       hasError = true;
-      console.error(`  ✗ ${f}: ${err instanceof Error ? err.message : String(err)}`);
+      fileEntries.push({
+        file: f,
+        output: '',
+        format: '',
+        original: 0,
+        cleaned: 0,
+        removed: [],
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
+
+  printEntries(fileEntries, a.outputFormat, a.quiet);
 
   // ── Write audit report ──
   if (a.report && allReports.length > 0) {
@@ -611,7 +851,9 @@ async function main(): Promise<void> {
 
 // ─── Entry ────────────────────────────────────────────────────────────────────
 
-main().catch((err: unknown) => {
-  console.error(err instanceof Error ? err.message : String(err));
-  process.exit(1);
-});
+if (process.argv[1] === __filename) {
+  main().catch((err: unknown) => {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });
+}

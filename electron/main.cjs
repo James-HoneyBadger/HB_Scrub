@@ -5,10 +5,11 @@ process.noDeprecation = true;                   // suppress url.parse DEP0169
 process.env.GTK_MODULES = '';                   // suppress colorreload/window-decorations GTK warnings
 process.env.GTK2_RC_FILES = '';
 
-const { app, BrowserWindow, shell, Menu } = require('electron');
+const { app, BrowserWindow, shell, Menu, ipcMain, dialog, Tray, nativeImage } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
+const fs = require('fs');
 
 // Suppress Chromium GPU/VSync and DBus noise on Linux
 app.commandLine.appendSwitch('disable-gpu-vsync');
@@ -18,6 +19,8 @@ app.commandLine.appendSwitch('log-level', '3'); // only fatal errors
 const PORT = 3777;
 let mainWindow = null;
 let guiServer = null;
+let tray = null;
+let watchHandle = null;
 
 // ─── Start the GUI HTTP server as a child process ────────────────────────────
 
@@ -73,6 +76,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, 'preload.cjs'),
     },
     show: false,
   });
@@ -98,6 +102,15 @@ function createWindow() {
     {
       label: 'File',
       submenu: [
+        {
+          label: 'Open Files…',
+          accelerator: 'CmdOrCtrl+O',
+          click: async () => {
+            if (!mainWindow) return;
+            mainWindow.webContents.executeJavaScript('window._electronOpenFiles && window._electronOpenFiles()');
+          },
+        },
+        { type: 'separator' },
         { role: 'quit' },
       ],
     },
@@ -130,6 +143,141 @@ function createWindow() {
   Menu.setApplicationMenu(menu);
 }
 
+// ─── IPC: native file picker (#14) ───────────────────────────────────────────
+
+ipcMain.handle('open-files', async () => {
+  if (!mainWindow) return [];
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile', 'multiSelections'],
+    filters: [
+      {
+        name: 'Images & Documents',
+        extensions: [
+          'jpg', 'jpeg', 'png', 'webp', 'gif', 'svg',
+          'tiff', 'tif', 'heic', 'heif', 'avif',
+          'pdf', 'mp4', 'mov', 'dng', 'raw', 'nef', 'cr2', 'arw',
+        ],
+      },
+      { name: 'All Files', extensions: ['*'] },
+    ],
+  });
+  if (!result.filePaths || result.filePaths.length === 0) return [];
+  return Promise.all(
+    result.filePaths.map(async (fp) => {
+      const buf = await fs.promises.readFile(fp);
+      return { name: path.basename(fp), data: buf.toString('base64') };
+    })
+  );
+});
+
+// ─── Watch folder (#15) ───────────────────────────────────────────────────────
+
+function stopWatch() {
+  if (watchHandle) {
+    watchHandle.close();
+    watchHandle = null;
+  }
+}
+
+const SUPPORTED_EXTS = new Set([
+  '.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg',
+  '.tiff', '.tif', '.heic', '.heif', '.avif',
+  '.pdf', '.mp4', '.mov', '.dng', '.raw', '.nef', '.cr2', '.arw',
+]);
+
+function startWatch(dir) {
+  stopWatch();
+  watchHandle = fs.watch(dir, { persistent: false }, async (event, filename) => {
+    if (!filename) return;
+    const ext = path.extname(filename).toLowerCase();
+    if (!SUPPORTED_EXTS.has(ext)) return;
+    const fp = path.join(dir, filename);
+    // Debounce — wait briefly for the file write to complete
+    setTimeout(async () => {
+      try {
+        const buf = await fs.promises.readFile(fp);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('watch-file', {
+            name: path.basename(fp),
+            data: buf.toString('base64'),
+          });
+        }
+      } catch {
+        // File may not be accessible yet; silently skip
+      }
+    }, 400);
+  });
+}
+
+// ─── System tray (#15) ───────────────────────────────────────────────────────
+
+function updateTrayMenu(watchingDir = null) {
+  if (!tray) return;
+  const menu = Menu.buildFromTemplate([
+    {
+      label: 'Open HB Scrub',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        } else {
+          createWindow();
+        }
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Watch Folder…',
+      click: async () => {
+        const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+        if (!result.filePaths || result.filePaths.length === 0) return;
+        const dir = result.filePaths[0];
+        startWatch(dir);
+        updateTrayMenu(dir);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.executeJavaScript(
+            `window._showToast && window._showToast('Watching: ${dir.replace(/'/g, "\\'")}', '')`
+          );
+        }
+      },
+    },
+    {
+      label: watchingDir ? `Stop Watching (${path.basename(watchingDir)})` : 'Stop Watching',
+      enabled: watchingDir !== null,
+      click: () => {
+        stopWatch();
+        updateTrayMenu(null);
+      },
+    },
+    { type: 'separator' },
+    { label: 'Quit', click: () => app.quit() },
+  ]);
+  tray.setContextMenu(menu);
+}
+
+function createTray() {
+  // Use a small inline PNG icon; replace electron/icon.png for a custom icon
+  const iconPath = path.join(__dirname, 'icon.png');
+  let icon;
+  try {
+    icon = nativeImage.createFromPath(iconPath);
+    if (icon.isEmpty()) icon = nativeImage.createEmpty();
+  } catch {
+    icon = nativeImage.createEmpty();
+  }
+  tray = new Tray(icon);
+  tray.setToolTip('HB Scrub — Metadata Remover');
+  tray.on('click', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    } else {
+      createWindow();
+    }
+  });
+  updateTrayMenu(null);
+}
+
 // ─── App lifecycle ───────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
@@ -142,6 +290,7 @@ app.whenReady().then(async () => {
     return;
   }
   createWindow();
+  createTray();
 });
 
 app.on('window-all-closed', () => {
@@ -156,6 +305,7 @@ app.on('activate', async () => {
 });
 
 app.on('will-quit', () => {
+  stopWatch();
   if (guiServer) {
     guiServer.kill();
     guiServer = null;

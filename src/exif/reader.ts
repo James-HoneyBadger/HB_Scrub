@@ -446,6 +446,13 @@ export function readExifBlock(exifData: Uint8Array, out: Partial<MetadataMap>): 
     if (nextIfdOffset !== 0) {
       out.hasThumbnail = true;
     }
+
+    // Raw tag map — all IFD0 tags by number
+    const rawMap: Record<string, unknown> = {};
+    for (const [tag, val] of tags) {
+      rawMap[`ifd0:${tag}`] = val;
+    }
+    out.raw = rawMap;
   } catch {
     // Ignore malformed EXIF
   }

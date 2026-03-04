@@ -97,18 +97,22 @@ async function collectFiles(
 }
 
 /**
- * Very lightweight glob matcher (supports * and ? only, no **).
+ * Glob matcher supporting *, ?, and ** (matches across path separators).
+ * @internal exported for testing
  */
-function matchGlob(filename: string, pattern: string): boolean {
-  const regex = new RegExp(
-    '^' +
-      pattern
-        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-        .replace(/\*/g, '.*')
-        .replace(/\?/g, '.') +
-      '$',
-    'i'
-  );
+export function matchGlob(filename: string, pattern: string): boolean {
+  // Escape all regex special chars except * and ?
+  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  // Replace patterns in order of specificity.
+  // IMPORTANT: ? must be replaced BEFORE expanding the \x00 placeholder,
+  // otherwise `(?:` in the non-capturing group gets mangled.
+  const regexStr = escaped
+    .replace(/\*\*\//g, '\x00')        // **/ → placeholder (expanded last)
+    .replace(/\*\*/g,   '.*')           // remaining ** → match anything
+    .replace(/\*/g,     '[^/]*')        // * → within one path segment
+    .replace(/\?/g,     '[^/]')         // ? → single non-separator char
+    .replace(/\x00/g,   '(?:[^/]+/)*'); // **/ → zero-or-more "seg/"
+  const regex = new RegExp('^' + regexStr + '$', 'i');
   return regex.test(filename);
 }
 
