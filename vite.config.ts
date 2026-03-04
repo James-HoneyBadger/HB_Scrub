@@ -51,6 +51,9 @@ export default defineConfig({
         'node:url',
         'node:stream',
         'node:http',
+        'node:os',
+        'node:process',
+        'node:child_process',
       ],
       output: {
         preserveModules: false,
