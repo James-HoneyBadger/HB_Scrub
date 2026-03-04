@@ -950,5 +950,5 @@ electron/
 
 ---
 
-*Documentation for HB_Scrub v1.1.0 — © 2026 Honey Badger Universe*  
+*Documentation for HB_Scrub v1.2.0 — © 2026 Honey Badger Universe*  
 *Author: James Temple &lt;james@honey-badger.org&gt;*

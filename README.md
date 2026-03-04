@@ -308,7 +308,7 @@ const result = await removeMetadata(imageBytes, {
 const result = await removeMetadata(imageBytes, {
   inject: {
     copyright:        '© 2026 Honey Badger Universe',
-    software:         'HB_Scrub v1.1.0',
+    software:         'HB_Scrub v1.2.0',
     artist:           'James Temple',
     imageDescription: 'Product photo — cleaned',
     dateTime:         '2026:01:15 12:00:00',

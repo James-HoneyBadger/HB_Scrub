@@ -269,4 +269,4 @@ Kill the conflicting process or change the port in `electron/main.cjs` and `src/
 
 ---
 
-*Documentation for HB_Scrub v1.1.0 — © 2026 Honey Badger Universe*
+*Documentation for HB_Scrub v1.2.0 — © 2026 Honey Badger Universe*

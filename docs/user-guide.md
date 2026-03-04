@@ -501,7 +501,7 @@ Write clean metadata fields into the output after scrubbing. Supported for JPEG 
 const result = await removeMetadata(imageBytes, {
   inject: {
     copyright:        '© 2026 Honey Badger Universe',
-    software:         'HB_Scrub v1.1.0',
+    software:         'HB_Scrub v1.2.0',
     artist:           'James Temple',
     imageDescription: 'Product photo — cleaned',
     dateTime:         '2026:03:03 12:00:00',
@@ -513,7 +513,7 @@ CLI equivalents:
 
 ```bash
 hb-scrub photo.jpg --inject-copyright "© 2026 Honey Badger Universe"
-hb-scrub photo.jpg --inject-software  "HB_Scrub v1.1.0"
+hb-scrub photo.jpg --inject-software  "HB_Scrub v1.2.0"
 hb-scrub photo.jpg --inject-artist    "James Temple"
 hb-scrub photo.jpg --inject-description "Product shot"
 hb-scrub photo.jpg --inject-datetime  "2026:01:15 12:00:00"
@@ -782,7 +782,7 @@ try {
 
 ---
 
-*Documentation for HB_Scrub v1.1.0 — © 2026 Honey Badger Universe*
+*Documentation for HB_Scrub v1.2.0 — © 2026 Honey Badger Universe*
 
 ---
 
@@ -844,7 +844,7 @@ CLI flags take precedence over config file values.
   "report":        "audit.json",
   "inject": {
     "copyright":   "© 2026 Honey Badger Universe",
-    "software":    "HB_Scrub v1.1.0"
+    "software":    "HB_Scrub v1.2.0"
   }
 }
 ```
@@ -853,4 +853,4 @@ Any key that maps to a CLI flag is accepted. Unknown keys are silently ignored.
 
 ---
 
-*Documentation for HB_Scrub v1.1.0 — © 2026 Honey Badger Universe*
+*Documentation for HB_Scrub v1.2.0 — © 2026 Honey Badger Universe*
