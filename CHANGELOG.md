@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased]
+## [1.3.0] — 2026-03-06
 
 ### Added
 - **Warnings system** — `RemoveResult`, `ReadResult`, and `VerifyResult` now

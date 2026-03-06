@@ -1,6 +1,6 @@
 {
   "name": "hb-scrub",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Remove EXIF, GPS, and other metadata from images and documents. Supports JPEG, PNG, WebP, GIF, SVG, TIFF, HEIC, AVIF, PDF, MP4/MOV, and RAW formats.",
   "type": "module",
   "main": "dist/hb-scrub.cjs",
