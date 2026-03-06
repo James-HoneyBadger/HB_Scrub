@@ -172,6 +172,11 @@ export interface RemoveResult {
    * Currently only set when a RAW file is converted to its embedded JPEG preview.
    */
   outputFormat?: SupportedFormat;
+  /**
+   * Non-fatal warnings encountered during processing.
+   * Examples: malformed EXIF data, GPS redaction failure, encrypted PDF skipped.
+   */
+  warnings: string[];
 }
 
 /**
@@ -184,6 +189,11 @@ export interface ReadResult {
   format: SupportedFormat;
   /** File size in bytes. */
   fileSize: number;
+  /**
+   * Non-fatal warnings encountered during metadata reading.
+   * Examples: malformed EXIF block, truncated GPS data.
+   */
+  warnings: string[];
 }
 
 /**
@@ -203,6 +213,10 @@ export interface VerifyResult {
    * - `'low'`    — format where hidden metadata may exist beyond what we can detect (SVG, unknown)
    */
   confidence: 'high' | 'medium' | 'low';
+  /**
+   * Non-fatal warnings encountered during verification.
+   */
+  warnings: string[];
 }
 
 /**
@@ -259,6 +273,13 @@ export interface BatchOptions extends RemoveOptions {
   backupSuffix?: string;
   include?: string[];
   exclude?: string[];
+  /**
+   * Called after each file is processed.
+   * @param completed  Number of files finished so far.
+   * @param total      Total files to process.
+   * @param currentFile  Path of the file that just completed.
+   */
+  onProgress?: (completed: number, total: number, currentFile: string) => void;
 }
 
 /**

@@ -72,6 +72,9 @@ export { raw } from './formats/raw.js';
 export * as buffer from './binary/buffer.js';
 export * as dataview from './binary/dataview.js';
 export { crc32 } from './binary/crc32.js';
+export { normalizeInput } from './binary/normalize.js';
+export { parseTiffHeader, readOrientation } from './binary/tiff.js';
+export type { TiffHeader } from './binary/tiff.js';
 
 // File signatures for format detection
 export { FILE_SIGNATURES } from './signatures.js';

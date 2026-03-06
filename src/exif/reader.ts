@@ -9,7 +9,7 @@
 
 import * as buffer from '../binary/buffer.js';
 import * as dataview from '../binary/dataview.js';
-import type { ExifData, GpsCoordinates, MetadataMap, SupportedFormat } from '../types.js';
+import type { ExifData, GpsCoordinates, MetadataMap } from '../types.js';
 
 // ─── Type sizes ──────────────────────────────────────────────────────────────
 
@@ -458,24 +458,3 @@ export function readExifBlock(exifData: Uint8Array, out: Partial<MetadataMap>): 
   }
 }
 
-/**
- * Convert a SupportedFormat to a human label for MIME etc.
- */
-export function formatLabel(fmt: SupportedFormat): string {
-  const labels: Partial<Record<SupportedFormat, string>> = {
-    jpeg: 'JPEG',
-    png: 'PNG',
-    webp: 'WebP',
-    gif: 'GIF',
-    svg: 'SVG',
-    tiff: 'TIFF',
-    heic: 'HEIC',
-    avif: 'AVIF',
-    dng: 'DNG',
-    raw: 'RAW',
-    pdf: 'PDF',
-    mp4: 'MP4',
-    mov: 'MOV',
-  };
-  return labels[fmt] ?? fmt.toUpperCase();
-}

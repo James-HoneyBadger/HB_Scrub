@@ -367,15 +367,62 @@ export function getMetadataTypes(data: Uint8Array): string[] {
 import type { MetadataMap } from '../types.js';
 
 /**
+ * Extract comment text from a GIF comment extension block.
+ *
+ * Comment extensions use sub-blocks: each begins with a length byte
+ * followed by that many bytes of ASCII text, terminated by a 0x00 byte.
+ * The raw block `data` from `parseBlocks` starts with `0x21 0xFE`.
+ */
+function extractCommentText(block: GifBlock): string {
+  const d = block.data;
+  // block.data starts with 0x21 (introducer) 0xFE (comment label)
+  let pos = 2;
+  const parts: string[] = [];
+
+  while (pos < d.length) {
+    const len = d[pos]!;
+    pos += 1;
+    if (len === 0) break; // block terminator
+    if (pos + len > d.length) break;
+    parts.push(buffer.toAscii(d, pos, len));
+    pos += len;
+  }
+
+  return parts.join('');
+}
+
+/**
  * Read structured metadata from a GIF without modifying it.
- * GIF has no EXIF support — only XMP comments are surfaced.
+ *
+ * Extracts:
+ * - XMP presence (via application extensions)
+ * - Comment text from comment extensions (0xFE)
+ * - Application extension identifiers
  */
 export function read(data: Uint8Array): Partial<MetadataMap> {
   const out: Partial<MetadataMap> = {};
   try {
     const blocks = parseBlocks(data);
-    if (blocks.some(b => isXmpExtension(b))) {
-      out.hasXmp = true;
+    const comments: string[] = [];
+
+    for (const b of blocks) {
+      if (isXmpExtension(b)) {
+        out.hasXmp = true;
+      } else if (isCommentExtension(b)) {
+        const text = extractCommentText(b);
+        if (text.length > 0) {
+          comments.push(text);
+        }
+      }
+    }
+
+    if (comments.length > 0) {
+      // Store the first comment in imageDescription, all in raw
+      const first = comments[0];
+      if (first !== undefined) {
+        out.imageDescription = first;
+      }
+      out.raw = { comments };
     }
   } catch {
     /* ignore */

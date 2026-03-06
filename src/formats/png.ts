@@ -1,5 +1,6 @@
 import { RemoveOptions } from '../types.js';
 import { readExifBlock } from '../exif/reader.js';
+import { readOrientation } from '../binary/tiff.js';
 import type { MetadataMap } from '../types.js';
 import { CorruptedFileError } from '../errors.js';
 import * as buffer from '../binary/buffer.js';
@@ -145,38 +146,6 @@ function buildPng(chunks: PngChunk[]): Uint8Array {
 }
 
 /**
- * Read the Orientation value (tag 0x0112) from a raw EXIF block.
- * PNG eXIf chunks contain a raw TIFF-formatted EXIF block (II/MM header).
- */
-function readOrientationFromRawExif(exifData: Uint8Array): number | null {
-  if (exifData.length < 8) {
-    return null;
-  }
-  try {
-    const byteOrder = buffer.toAscii(exifData, 0, 2);
-    const littleEndian = byteOrder === 'II';
-    const ifdOffset = dataview.readUint32(exifData, 4, littleEndian);
-    if (ifdOffset + 2 > exifData.length) {
-      return null;
-    }
-    const numEntries = dataview.readUint16(exifData, ifdOffset, littleEndian);
-    for (let i = 0; i < numEntries; i++) {
-      const entryOffset = ifdOffset + 2 + i * 12;
-      if (entryOffset + 12 > exifData.length) {
-        break;
-      }
-      const tag = dataview.readUint16(exifData, entryOffset, littleEndian);
-      if (tag === 0x0112 /* Orientation */) {
-        return dataview.readUint16(exifData, entryOffset + 8, littleEndian);
-      }
-    }
-  } catch {
-    // Ignore malformed EXIF
-  }
-  return null;
-}
-
-/**
  * Build a minimal eXIf chunk containing only the Orientation tag (big-endian).
  */
 function buildOrientationExifChunk(orientation: number): PngChunk {
@@ -262,7 +231,7 @@ export function remove(data: Uint8Array, options: RemoveOptions = {}): Uint8Arra
   if (options.preserveOrientation === true) {
     const exifChunk = chunks.find(c => c.type === 'eXIf');
     if (exifChunk) {
-      savedOrientation = readOrientationFromRawExif(exifChunk.data);
+      savedOrientation = readOrientation(exifChunk.data);
     }
   }
 

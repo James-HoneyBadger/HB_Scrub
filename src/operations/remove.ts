@@ -1,6 +1,7 @@
 import { SupportedFormat, RemoveOptions, RemoveResult } from '../types.js';
-import { InvalidFormatError, UnsupportedFormatError } from '../errors.js';
+import { UnsupportedFormatError } from '../errors.js';
 import { detectFormat } from '../detect.js';
+import { normalizeInput } from '../binary/normalize.js';
 
 import { jpeg } from '../formats/jpeg.js';
 import { png } from '../formats/png.js';
@@ -22,6 +23,8 @@ import {
   wrapInJpegApp1,
 } from '../exif/writer.js';
 import { crc32Png } from '../binary/crc32.js';
+import * as buffer from '../binary/buffer.js';
+import * as dataview from '../binary/dataview.js';
 
 /**
  * Format handler interface
@@ -102,33 +105,10 @@ const handlers: Record<SupportedFormat, FormatHandler | null> = {
 };
 
 /**
- * Normalize input to Uint8Array. Exported for use by read.ts and verify.ts.
+ * Re-export normalizeInput for backward compatibility.
+ * Canonical source is now `../binary/normalize.js`.
  */
-export function normalizeInput(input: Uint8Array | ArrayBuffer | string): Uint8Array {
-  if (typeof input === 'string') {
-    if (input.startsWith('data:')) {
-      const commaIndex = input.indexOf(',');
-      if (commaIndex === -1) {
-        throw new InvalidFormatError('Invalid data URL format');
-      }
-      const base64Data = input.slice(commaIndex + 1);
-      const binaryString = atob(base64Data);
-      const data = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        data[i] = binaryString.charCodeAt(i);
-      }
-      return data;
-    }
-    throw new InvalidFormatError('String input must be a data URL');
-  }
-  if (input instanceof ArrayBuffer) {
-    return new Uint8Array(input);
-  }
-  if (input instanceof Uint8Array) {
-    return input;
-  }
-  throw new InvalidFormatError('Input must be Uint8Array, ArrayBuffer, or data URL string');
-}
+export { normalizeInput } from '../binary/normalize.js';
 
 // ─── EXIF injection helper ─────────────────────────────────────────────────────
 
@@ -171,11 +151,57 @@ function injectIntoPng(data: Uint8Array, rawTiff: Uint8Array): Uint8Array {
 }
 
 /**
+ * Inject an EXIF RIFF chunk into a WebP file and update the VP8X flags.
+ *
+ * Strategy:
+ * 1. Build a RIFF "EXIF" sub-chunk: fourcc (4) + size LE (4) + tiffBlock + pad.
+ * 2. Append it before the file trailer.
+ * 3. If a VP8X chunk exists, set the EXIF flag (bit 3); otherwise create one.
+ * 4. Rewrite the RIFF file-size field.
+ */
+function injectIntoWebp(data: Uint8Array, rawTiff: Uint8Array): Uint8Array {
+  if (rawTiff.length === 0) return data;
+
+  // Validate minimal WebP structure (RIFF....WEBP)
+  if (data.length < 12) return data;
+
+  // Build EXIF chunk: "EXIF" + uint32LE(size) + rawTiff + padding
+  const fourcc = buffer.fromAscii('EXIF');
+  const chunkDataLen = rawTiff.length;
+  const padding = chunkDataLen % 2; // RIFF chunks are padded to even bytes
+  const exifChunk = new Uint8Array(8 + chunkDataLen + padding);
+  exifChunk.set(fourcc, 0);
+  dataview.writeUint32LE(exifChunk, 4, chunkDataLen);
+  exifChunk.set(rawTiff, 8);
+  // padding byte is already 0
+
+  // Append EXIF chunk at the end of the file
+  const newFile = buffer.concat(data, exifChunk);
+
+  // Update RIFF file size (bytes 4-7): total file length minus 8
+  dataview.writeUint32LE(newFile, 4, newFile.length - 8);
+
+  // Update VP8X flags if present
+  // VP8X is the first chunk after "RIFF....WEBP" (offset 12)
+  if (newFile.length >= 30) {
+    const firstFourcc = buffer.toAscii(newFile, 12, 4);
+    if (firstFourcc === 'VP8X') {
+      // VP8X data starts at offset 20 (12 + 4 fourcc + 4 size)
+      // flags byte is at VP8X data[0] = offset 20
+      newFile[20] = newFile[20]! | (1 << 3); // set EXIF flag (bit 3)
+    }
+  }
+
+  return newFile;
+}
+
+/**
  * Core removal logic shared between sync and async APIs
  */
 function processRemoval(data: Uint8Array, rawOptions: RemoveOptions): RemoveResult {
   const options = applyFieldOptions(rawOptions);
   const format = detectFormat(data);
+  const warnings: string[] = [];
 
   if (format === 'unknown') {
     throw new UnsupportedFormatError('unknown');
@@ -232,15 +258,28 @@ function processRemoval(data: Uint8Array, rawOptions: RemoveOptions): RemoveResu
           gpsLat = out.gps.latitude;
           gpsLng = out.gps.longitude;
         }
+      } else if (format === 'webp') {
+        // Use the WebP read() to extract GPS from its EXIF chunk
+        const out = webp.read(data);
+        if (out.gps) {
+          gpsLat = out.gps.latitude;
+          gpsLng = out.gps.longitude;
+        }
       }
       void meta;
-    } catch {
-      /* GPS unavailable */
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warnings.push(`GPS pre-read failed: ${msg}`);
     }
   }
 
   // Get metadata types before removal
   const removedMetadata = handler.getMetadataTypes(data);
+
+  // Detect encrypted PDFs (handler returns data unchanged with no indication)
+  if (format === 'pdf' && removedMetadata.includes('Encrypted')) {
+    warnings.push('Encrypted PDF: metadata cannot be removed without the decryption key');
+  }
 
   // Remove metadata
   let cleanedData = handler.remove(data, options);
@@ -260,10 +299,13 @@ function processRemoval(data: Uint8Array, rawOptions: RemoveOptions): RemoveResu
         cleanedData = injectIntoJpeg(cleanedData, app1);
       } else if (format === 'png') {
         cleanedData = injectIntoPng(cleanedData, gpsTiff);
+      } else if (format === 'webp') {
+        cleanedData = injectIntoWebp(cleanedData, gpsTiff);
       }
       // TIFF/DNG GPS re-injection would require in-place IFD patching — skip for now.
-    } catch {
-      /* GPS re-injection best-effort */
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warnings.push(`GPS re-injection failed: ${msg}`);
     }
   }
 
@@ -278,41 +320,32 @@ function processRemoval(data: Uint8Array, rawOptions: RemoveOptions): RemoveResu
         if (tiffBlock.length > 0) {
           cleanedData = injectIntoPng(cleanedData, tiffBlock);
         }
+      } else if (format === 'webp') {
+        const tiffBlock = buildRawExifBlock(options.inject);
+        if (tiffBlock.length > 0) {
+          cleanedData = injectIntoWebp(cleanedData, tiffBlock);
+        }
       }
-    } catch {
-      /* injection is best-effort */
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      warnings.push(`Metadata injection failed: ${msg}`);
     }
   }
 
   // Filter out items that were actually preserved based on options
-  if (options.preserveColorProfile) {
-    const idx = removedMetadata.indexOf('ICC Profile');
-    if (idx !== -1) {
-      removedMetadata.splice(idx, 1);
-    }
-  }
-  if (options.preserveCopyright) {
-    const idx = removedMetadata.indexOf('Copyright');
-    if (idx !== -1) {
-      removedMetadata.splice(idx, 1);
-    }
-  }
-  if (options.preserveOrientation) {
-    const idx = removedMetadata.indexOf('Orientation');
-    if (idx !== -1) {
-      removedMetadata.splice(idx, 1);
-    }
-  }
-  if (options.preserveTitle) {
-    const idx = removedMetadata.indexOf('Title');
-    if (idx !== -1) {
-      removedMetadata.splice(idx, 1);
-    }
-  }
-  if (options.preserveDescription) {
-    const idx = removedMetadata.indexOf('Description');
-    if (idx !== -1) {
-      removedMetadata.splice(idx, 1);
+  const PRESERVE_MAP: [keyof RemoveOptions, string][] = [
+    ['preserveColorProfile', 'ICC Profile'],
+    ['preserveCopyright', 'Copyright'],
+    ['preserveOrientation', 'Orientation'],
+    ['preserveTitle', 'Title'],
+    ['preserveDescription', 'Description'],
+  ];
+  for (const [flag, field] of PRESERVE_MAP) {
+    if (options[flag]) {
+      const idx = removedMetadata.indexOf(field);
+      if (idx !== -1) {
+        removedMetadata.splice(idx, 1);
+      }
     }
   }
 
@@ -331,6 +364,7 @@ function processRemoval(data: Uint8Array, rawOptions: RemoveOptions): RemoveResu
     originalSize: data.length,
     cleanedSize: cleanedData.length,
     removedMetadata,
+    warnings,
   };
   if (outputFormat) {
     result.outputFormat = outputFormat;

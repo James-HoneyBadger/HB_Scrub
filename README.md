@@ -14,13 +14,13 @@ No re-encoding. No quality loss. Zero runtime dependencies.
 - **Binary manipulation** — metadata stripped at the byte level; pixels are never touched
 - **Read metadata** — inspect what's inside a file before removing anything
 - **GPS redaction** — truncate coordinates (and altitude) to city/region/country precision instead of stripping
-- **Metadata injection** — write a clean copyright, software, artist, description, or datetime field into the output
-- **Named profiles** — `privacy`, `sharing`, and `archive` presets apply sensible field-control defaults in one flag
+- **Metadata injection** — write a clean copyright, software, artist, description, or datetime field into the output (JPEG, PNG, WebP)
+- **Named profiles** — `privacy`, `sharing`, and `archive` presets apply sensible field-control defaults in one flag (API, CLI, and GUI)
 - **Config file** — `.hbscrubrc` JSON file auto-loaded from the project or home directory
 - **Field-level control** — remove only specific fields, or explicitly keep a named subset
 - **Verify mode** — confirm no metadata remains; includes format confidence score
 - **Structured CLI output** — `--output-format table|json|csv` for scripting and dashboards
-- **Batch processing** — process entire directories with concurrency and audit reports (Node.js)
+- **Batch processing** — process entire directories with concurrency, progress callbacks, and audit reports (Node.js)
 - **Stream API** — pipe files through a Node.js Transform stream
 - **Sync and async APIs**
 - **TypeScript-first** — full type definitions included, no `@types/` package needed
@@ -55,6 +55,7 @@ console.log(result.format);           // 'jpeg'
 console.log(result.removedMetadata);  // ['EXIF', 'GPS', 'XMP']
 console.log(result.originalSize);     // 3_200_000
 console.log(result.cleanedSize);      // 2_980_000
+console.log(result.warnings);         // [] (non-fatal issues, if any)
 // result.data is the cleaned Uint8Array
 ```
 
@@ -109,6 +110,8 @@ npm run electron
 | Before/After Diff | After scrubbing, removed metadata types are shown as struck-through text |
 | ZIP Download | Download all cleaned files at once as a single `hb-scrub-clean.zip` |
 | Persistent Settings | Preserve options are saved to `localStorage` and restored on relaunch |
+| Profile Selector | Quick-switch between Privacy, Sharing, and Archive presets via a dropdown |
+| Inject Metadata | Collapsible panel to inject copyright, artist, software, description, and date/time into scrubbed output |
 
 To build a distributable package for your platform:
 
@@ -316,7 +319,7 @@ const result = await removeMetadata(imageBytes, {
 });
 ```
 
-Supported for JPEG (EXIF APP1) and PNG (eXIf chunk).
+Supported for JPEG (EXIF APP1), PNG (eXIf chunk), and WebP (RIFF EXIF sub-chunk).
 
 ---
 
@@ -340,10 +343,13 @@ console.log(metadata.exif?.iso);      // 400
 ```typescript
 import { verifyClean } from 'hb-scrub';
 
-const { clean, remainingMetadata, confidence } = await verifyClean(cleanedBytes);
+const { clean, remainingMetadata, confidence, warnings } = await verifyClean(cleanedBytes);
 // confidence: 'high' | 'medium' | 'low' — reflects how thorough the check is for this format
 if (!clean) {
   console.warn('Residual metadata found:', remainingMetadata);
+}
+if (warnings.length) {
+  console.warn('Warnings:', warnings);
 }
 ```
 
@@ -366,6 +372,9 @@ const { report } = await processDir('./photos', {
   suffix:       '-clean',
   gpsRedact:    'city',
   backupSuffix: '.bak',
+  onProgress:   (done, total, file) => {
+    console.log(`[${done}/${total}] ${file}`);
+  },
 });
 
 console.log(`${report.successful}/${report.totalFiles} files processed`);
@@ -442,6 +451,7 @@ Error classes: `HbScrubError` (base), `InvalidFormatError`, `CorruptedFileError`
 | `getMimeType(format)` | `string` | Map format to MIME type string |
 | `isFormatSupported(format)` | `boolean` | Check if a format has a handler |
 | `getSupportedFormats()` | `SupportedFormat[]` | List all supported formats |
+| `normalizeInput(input)` | `Uint8Array` | Convert `Uint8Array \| ArrayBuffer \| data URL` to `Uint8Array` |
 
 See [docs/technical-reference.md](docs/technical-reference.md) for the full API surface.
 
@@ -454,6 +464,8 @@ See [docs/technical-reference.md](docs/technical-reference.md) for the full API 
 | [Installation Guide](docs/installation.md) | All installation methods, requirements, bundler config |
 | [User Guide](docs/user-guide.md) | Detailed usage for all APIs, CLI, and the desktop app |
 | [Technical Reference](docs/technical-reference.md) | Full API, types, format internals, binary utilities |
+| [CHANGELOG](CHANGELOG.md) | Version history and release notes |
+| [CONTRIBUTING](CONTRIBUTING.md) | Contributor guide, conventions, handler contract |
 
 ---
 

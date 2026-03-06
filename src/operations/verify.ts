@@ -21,7 +21,7 @@
  */
 
 import { detectFormat } from '../detect.js';
-import { normalizeInput } from './remove.js';
+import { normalizeInput } from '../binary/normalize.js';
 import type { VerifyResult, SupportedFormat } from '../types.js';
 
 import { jpeg } from '../formats/jpeg.js';
@@ -77,15 +77,23 @@ function getConfidence(format: SupportedFormat): 'high' | 'medium' | 'low' {
 export function verifyCleanSync(input: Uint8Array | ArrayBuffer | string): VerifyResult {
   const data = normalizeInput(input);
   const format = detectFormat(data);
+  const warnings: string[] = [];
 
   const checker = checkers[format];
-  const remainingMetadata = checker ? checker.getMetadataTypes(data) : [];
+  let remainingMetadata: string[] = [];
+  try {
+    remainingMetadata = checker ? checker.getMetadataTypes(data) : [];
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    warnings.push(`Verification error: ${msg}`);
+  }
 
   return {
     clean: remainingMetadata.length === 0,
     format,
     remainingMetadata,
     confidence: getConfidence(format),
+    warnings,
   };
 }
 

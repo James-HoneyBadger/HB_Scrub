@@ -527,6 +527,20 @@ export function loadRcFile(): string[] {
     join(process.cwd(), '.hbscrubrc'),
     join(homedir(), '.hbscrubrc'),
   ];
+
+  /** Known valid keys that map to CLI flags. */
+  const VALID_KEYS = new Set([
+    'in-place', 'output', 'suffix', 'recursive', 'quiet',
+    'inspect', 'verify',
+    'preserve-orientation', 'preserve-color-profile', 'preserve-copyright',
+    'remove', 'keep',
+    'gps-redact',
+    'inject-copyright', 'inject-software', 'inject-artist',
+    'inject-description', 'inject-datetime',
+    'concurrency', 'dry-run', 'skip-existing', 'backup',
+    'report', 'watch', 'output-format', 'profile',
+  ]);
+
   for (const candidate of candidates) {
     if (!existsSync(candidate)) {
       continue;
@@ -535,6 +549,10 @@ export function loadRcFile(): string[] {
       const raw = JSON.parse(readFileSync(candidate, 'utf-8')) as Record<string, unknown>;
       const extra: string[] = [];
       for (const [key, val] of Object.entries(raw)) {
+        if (!VALID_KEYS.has(key)) {
+          console.error(`Warning: unknown key "${key}" in ${candidate} — ignored`);
+          continue;
+        }
         const flag = '--' + key;
         if (val === true) {
           extra.push(flag);
@@ -545,8 +563,9 @@ export function loadRcFile(): string[] {
         }
       }
       return extra;
-    } catch {
-      // ignore malformed rc file
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Warning: failed to parse ${candidate}: ${msg}`);
     }
     break;
   }

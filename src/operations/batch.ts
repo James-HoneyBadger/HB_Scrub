@@ -203,15 +203,23 @@ async function processSingleFile(inputPath: string, options: BatchOptions): Prom
 async function runConcurrent<T>(
   items: T[],
   concurrency: number,
-  fn: (item: T) => Promise<AuditEntry>
+  fn: (item: T) => Promise<AuditEntry>,
+  onProgress?: (completed: number, total: number, currentFile: string) => void
 ): Promise<AuditEntry[]> {
   const results: AuditEntry[] = [];
   const queue = [...items];
+  let completed = 0;
+  const total = items.length;
 
   const worker = async () => {
     while (queue.length > 0) {
       const item = queue.shift()!;
-      results.push(await fn(item));
+      const entry = await fn(item);
+      results.push(entry);
+      completed++;
+      if (onProgress) {
+        onProgress(completed, total, entry.file);
+      }
     }
   };
 
@@ -260,7 +268,8 @@ export async function processFiles(
   const entries = await runConcurrent(
     filePaths.map(f => resolve(f)),
     concurrency,
-    file => processSingleFile(file, options)
+    file => processSingleFile(file, options),
+    options.onProgress
   );
 
   const successful = entries.filter(e => e.success);

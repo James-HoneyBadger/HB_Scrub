@@ -47,7 +47,9 @@ Or, if you have built a distributable package, launch it like any native applica
 | Clipboard Paste | Paste image files from the clipboard (Ctrl+V / Cmd+V) without opening a dialog |
 | Format detection | Format and metadata summary shown immediately on drop |
 | Preserve options | Toggle orientation, color profile, and copyright retention via checkboxes; settings persist across sessions |
+| Profile selector | Quick-switch between Privacy, Sharing, and Archive presets via a dropdown |
 | GPS redaction | Choose strip / city / region / country from a dropdown |
+| Inject metadata | Collapsible panel to inject copyright, artist, software, description, and date/time into scrubbed output |
 | Before/After Diff | Removed metadata types are shown as struck-through text alongside the clean output |
 | Download | Clean file downloads to your default download folder |
 | ZIP Download | Download all cleaned files at once as a single `hb-scrub-clean.zip` |
@@ -81,6 +83,7 @@ result.format          // 'jpeg' | 'png' | 'webp' | ...
 result.removedMetadata // ['EXIF', 'GPS', 'XMP']
 result.originalSize    // bytes
 result.cleanedSize     // bytes
+result.warnings        // [] (non-fatal issues, if any)
 ```
 
 ### `removeMetadataSync(input, options?)`
@@ -150,6 +153,7 @@ result.format      // 'jpeg'
 result.originalSize
 result.cleanedSize
 result.removedMetadata
+result.warnings    // non-fatal issues encountered
 ```
 
 **Output path resolution** (evaluated in order):
@@ -333,6 +337,9 @@ const { report } = await processDir('./photos', {
   backupSuffix: '.bak',
   skipExisting: true,
   gpsRedact:    'city',
+  onProgress:   (done, total, file) => {
+    process.stdout.write(`\r[${done}/${total}] ${file}`);
+  },
 });
 
 console.log(`${report.successful}/${report.totalFiles} files processed`);
@@ -372,6 +379,7 @@ The report contains per-file entries with: `file`, `format`, `originalSize`, `cl
 | `outputDir` | `string` | same dir | Output directory |
 | `suffix` | `string` | `'-clean'` | Filename suffix |
 | `concurrency` | `number` | `4` | Max files processed in parallel |
+| `onProgress` | `function` | — | `(completed, total, currentFile) => void` — called after each file |
 | `dryRun` | `boolean` | `false` | Detect only — write nothing |
 | `skipExisting` | `boolean` | `false` | Skip if output already exists |
 | `backupSuffix` | `string` | — | Copy original before overwriting |
@@ -495,7 +503,7 @@ hb-scrub photo.jpg --gps-redact city
 
 ## 9. Metadata Injection
 
-Write clean metadata fields into the output after scrubbing. Supported for JPEG (EXIF APP1) and PNG (eXIf chunk). Injection is silently skipped for other formats.
+Write clean metadata fields into the output after scrubbing. Supported for JPEG (EXIF APP1), PNG (eXIf chunk), and WebP (RIFF EXIF sub-chunk). Injection is silently skipped for other formats.
 
 ```typescript
 const result = await removeMetadata(imageBytes, {
@@ -604,11 +612,15 @@ Confirm that no known metadata remains after scrubbing:
 ```typescript
 import { verifyClean } from 'hb-scrub';
 
-const { clean, remainingMetadata, confidence } = await verifyClean(cleanedBytes);
+const { clean, remainingMetadata, confidence, warnings } = await verifyClean(cleanedBytes);
 
 if (!clean) {
   console.warn('Residual metadata detected:', remainingMetadata);
   // e.g. ['ICC Profile']
+}
+
+if (warnings.length) {
+  console.warn('Warnings:', warnings);
 }
 
 console.log(confidence); // 'high' | 'medium' | 'low'
@@ -651,11 +663,14 @@ hb-scrub photo.jpg --verify
 - RIFF container — strips `EXIF` and `XMP` chunks
 - `ICCP` removed unless `preserveColorProfile`
 - `VP8X` feature flags chunk automatically regenerated after removal
+- Metadata injection supported — builds an EXIF RIFF sub-chunk and updates VP8X flags
+- GPS redaction re-injection supported
 
 ### GIF
 
 - Strips: Comment extensions (`0xFE`), XMP application extensions, other application-specific extensions
 - Preserves: Graphics Control extensions (animation timing), NETSCAPE extension (loop count)
+- `read()` extracts comment text from comment extensions into `imageDescription` and `raw.comments`
 
 ### SVG
 
@@ -706,6 +721,11 @@ import {
 
 try {
   const result = await removeMetadata(imageBytes);
+
+  // Check for non-fatal warnings (e.g. encrypted PDF, preserve-flag issues)
+  if (result.warnings.length) {
+    console.warn('Warnings:', result.warnings);
+  }
 } catch (err) {
   if (err instanceof UnsupportedFormatError) {
     // File format not recognised or not supported
@@ -756,6 +776,7 @@ try {
 | `getMimeType` | `(format) → string` | Map format to MIME type |
 | `isFormatSupported` | `(format) → boolean` | Check format support |
 | `getSupportedFormats` | `() → SupportedFormat[]` | List all formats |
+| `normalizeInput` | `(input) → Uint8Array` | Convert `Uint8Array \| ArrayBuffer \| data URL` to `Uint8Array` |
 
 ### Node.js (`hb-scrub/node`)
 
@@ -778,7 +799,7 @@ try {
 | `remove` | `MetadataFieldName[]` | — | Remove only these; keep all others |
 | `keep` | `MetadataFieldName[]` | — | Always keep these fields |
 | `gpsRedact` | `GpsRedactPrecision` | `'remove'` | GPS handling |
-| `inject` | `MetadataInjectOptions` | — | Fields to write into cleaned output |
+| `inject` | `MetadataInjectOptions` | — | Fields to write into cleaned output (JPEG, PNG, WebP) |
 
 ---
 
@@ -849,7 +870,7 @@ CLI flags take precedence over config file values.
 }
 ```
 
-Any key that maps to a CLI flag is accepted. Unknown keys are silently ignored.
+Any key that maps to a CLI flag is accepted. Unknown keys produce a warning on `stderr` but do not prevent execution.
 
 ---
 

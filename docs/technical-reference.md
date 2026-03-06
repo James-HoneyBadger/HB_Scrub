@@ -272,6 +272,11 @@ interface RemoveOptions {
 
 ### `MetadataInjectOptions`
 
+After metadata removal, these fields are written back into the cleaned file as a
+minimal EXIF block. Supported formats: **JPEG**, **PNG**, and **WebP**. For
+unsupported formats the fields are silently ignored and a warning is added to the
+result.
+
 ```typescript
 interface MetadataInjectOptions {
   copyright?:        string;
@@ -302,6 +307,9 @@ interface RemoveResult {
 
   /** Output file size in bytes. */
   cleanedSize: number;
+
+  /** Non-fatal issues encountered during processing. */
+  warnings: string[];
 }
 ```
 
@@ -319,6 +327,9 @@ interface ReadResult {
 
   /** Input file size in bytes. */
   fileSize: number;
+
+  /** Non-fatal issues encountered during processing. */
+  warnings: string[];
 }
 ```
 
@@ -369,13 +380,21 @@ interface GpsCoordinates {
 
 ```typescript
 interface ExifData {
-  exposureTime?: number;    // seconds, e.g. 0.01
-  fNumber?:      number;    // e.g. 2.8
-  iso?:          number;
-  focalLength?:  number;    // mm
-  flash?:        number;    // EXIF flash bitmask
-  whiteBalance?: number;
-  exposureMode?: number;
+  dateTimeOriginal?:  string;   // e.g. "2026:01:15 14:30:00"
+  dateTimeDigitized?: string;
+  exposureTime?:      string;   // Formatted rational, e.g. "1/200"
+  fNumber?:           number;   // e.g. 2.8
+  iso?:               number;
+  focalLength?:       number;   // mm
+  flash?:             boolean;  // true if flash fired
+  lensModel?:         string;
+  lensManufacturer?:  string;
+  colorSpace?:        number;
+  pixelWidth?:        number;
+  pixelHeight?:       number;
+  whiteBalance?:      number;
+  exposureMode?:      number;
+  exposureProgram?:   number;
 }
 ```
 
@@ -398,6 +417,9 @@ interface VerifyResult {
    * 'low'    — SVG or unrecognised format
    */
   confidence: 'high' | 'medium' | 'low';
+
+  /** Non-fatal issues encountered during processing. */
+  warnings: string[];
 }
 ```
 
@@ -448,6 +470,7 @@ interface BatchOptions extends RemoveOptions {
   recursive?:    boolean;   // Recurse into subdirectories
   include?:      string[];  // Glob patterns to include
   exclude?:      string[];  // Glob patterns to exclude
+  onProgress?:   (completed: number, total: number, currentFile: string) => void;
 }
 ```
 
@@ -592,9 +615,10 @@ Parses the PNG chunk stream. CRC-32 checksums are recomputed for all kept chunks
 webp.remove(data, options?)       // Uint8Array
 webp.getMetadataTypes(data)       // string[]
 webp.parseChunks(data)            // WebpChunk[]
+webp.read(data)                   // Partial<MetadataMap>
 ```
 
-Parses the RIFF container. Strips `EXIF` and `XMP` fourCC chunks. `ICCP` removed unless `preserveColorProfile`. The `VP8X` chunk (feature flags) is automatically regenerated after removal to keep the file valid.
+Parses the RIFF container. Strips `EXIF` and `XMP` fourCC chunks. `ICCP` removed unless `preserveColorProfile`. The `VP8X` chunk (feature flags) is automatically regenerated after removal to keep the file valid. Metadata injection supported — builds an EXIF RIFF sub-chunk and updates VP8X flags. GPS redaction re-injection supported.
 
 ---
 
@@ -604,9 +628,12 @@ Parses the RIFF container. Strips `EXIF` and `XMP` fourCC chunks. `ICCP` removed
 gif.remove(data, options?)        // Uint8Array
 gif.getMetadataTypes(data)        // string[]
 gif.parseBlocks(data)             // GifBlock[]
+gif.read(data)                    // Partial<MetadataMap>
 ```
 
 Strips: Comment extensions (`0xFE`), XMP application extensions, other application-specific extensions. Preserves: Graphics Control extensions (animation timing), NETSCAPE extension (loop count), Plain Text extensions.
+
+`read()` extracts comment text from comment extension blocks. The first comment is stored in `imageDescription`; all comments are stored in `raw.comments` as a `string[]`.
 
 ---
 
@@ -947,6 +974,107 @@ electron/
   main.cjs              Electron main process — spawns GUI server, IPC, Tray, watch
   preload.cjs           contextBridge: exposes electronAPI to renderer
 ```
+
+---
+
+## 13. GUI HTTP API
+
+Source: `src/gui.ts`
+
+The GUI server exposes a small JSON API on `http://127.0.0.1:3777`. All POST
+endpoints accept and return `application/json`. Request bodies are limited to
+**50 MB** by default (configurable via the `HB_SCRUB_MAX_BODY` environment
+variable, in bytes).
+
+### Exported function
+
+```typescript
+function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): void;
+```
+
+The request handler can be used directly without `startGui()` — useful for
+embedding in custom servers or tests.
+
+### `GET /`
+
+Serves the single-page GUI application (HTML + inline CSS/JS).
+
+### `GET /api/formats`
+
+Returns the list of supported format names (excludes `"unknown"`).
+
+**Response** `200`
+```json
+["jpeg","png","webp","gif","svg","tiff","heic","avif","pdf","mp4","mov","dng","raw"]
+```
+
+### `POST /api/read`
+
+Parse metadata from a file without modifying it.
+
+**Request body**
+```json
+{
+  "name": "photo.jpg",
+  "data": "<base64-encoded file bytes>"
+}
+```
+
+| Field  | Type   | Required | Description                            |
+|--------|--------|----------|----------------------------------------|
+| `name` | string | yes      | Original file name (used for format detection) |
+| `data` | string | yes      | Base64-encoded file contents           |
+
+**Response** `200`
+```json
+{
+  "format": "jpeg",
+  "metadataTypes": ["EXIF", "XMP", "IPTC", "ICC", "Thumbnail"]
+}
+```
+
+### `POST /api/process`
+
+Strip metadata from a file.
+
+**Request body**
+```json
+{
+  "name": "photo.jpg",
+  "data": "<base64-encoded file bytes>",
+  "options": {
+    "preserveOrientation": true,
+    "inject": { "copyright": "© 2026 Honey Badger Universe" }
+  }
+}
+```
+
+| Field     | Type   | Required | Description                            |
+|-----------|--------|----------|----------------------------------------|
+| `name`    | string | yes      | Original file name                     |
+| `data`    | string | yes      | Base64-encoded file contents           |
+| `options` | object | no       | `RemoveOptions` fields (see §3)        |
+
+**Response** `200`
+```json
+{
+  "name": "photo_clean.jpg",
+  "format": "jpeg",
+  "removed": ["EXIF", "XMP", "IPTC", "ICC", "Thumbnail"],
+  "warnings": [],
+  "data": "<base64-encoded cleaned file>"
+}
+```
+
+### Error responses
+
+| Status | Condition                                          | Body                                                           |
+|--------|----------------------------------------------------|----------------------------------------------------------------|
+| `400`  | Malformed JSON                                     | `{ "error": "Invalid JSON in request body" }`                  |
+| `400`  | Missing `name` or `data`                           | `{ "error": "Missing required fields: name (string) and data (base64 string)" }` |
+| `413`  | Request body exceeds size limit                    | `{ "error": "Request body exceeds 52428800 byte limit" }`     |
+| `404`  | Unknown route                                      | `Not found` (plain text)                                       |
+| `500`  | Processing error (unsupported format, corrupt file)| `{ "error": "<message>" }`                                    |
 
 ---
 

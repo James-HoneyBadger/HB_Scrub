@@ -144,6 +144,24 @@ describe('GET /', () => {
     const html = await fetch(`${baseUrl}/`).then((r) => r.text());
     expect(html).toContain('btn-scrub');
   });
+
+  it('HTML contains the profile selector', async () => {
+    const html = await fetch(`${baseUrl}/`).then((r) => r.text());
+    expect(html).toContain('id="opt-profile"');
+    expect(html).toContain('Privacy');
+    expect(html).toContain('Sharing');
+    expect(html).toContain('Archive');
+  });
+
+  it('HTML contains the inject metadata panel', async () => {
+    const html = await fetch(`${baseUrl}/`).then((r) => r.text());
+    expect(html).toContain('id="inject-panel"');
+    expect(html).toContain('id="inj-copyright"');
+    expect(html).toContain('id="inj-artist"');
+    expect(html).toContain('id="inj-software"');
+    expect(html).toContain('id="inj-description"');
+    expect(html).toContain('id="inj-datetime"');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -229,13 +247,13 @@ describe('POST /api/read', () => {
     expect(body.error).toBe('type error');
   });
 
-  it('returns 500 for invalid JSON body', async () => {
+  it('returns 400 for invalid JSON body', async () => {
     const res = await fetch(`${baseUrl}/api/read`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: 'not-valid-json',
     });
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
   });
 });
 
@@ -299,13 +317,13 @@ describe('POST /api/process', () => {
     expect(body.error).toBe('unsupported format');
   });
 
-  it('returns 500 for invalid JSON body', async () => {
+  it('returns 400 for invalid JSON body', async () => {
     const res = await fetch(`${baseUrl}/api/process`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '{bad json',
     });
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
   });
 });
 
@@ -373,6 +391,36 @@ describe('POST /api/process — option persistence (Feature 10 localStorage)', (
     await jsonPost('/api/process', { name: 'photo.jpg', data: SAMPLE_B64, options });
     const [, received] = (removeMetadataSync as Mock).mock.calls[0] as [Uint8Array, Record<string, unknown>];
     expect(received).toMatchObject(options);
+  });
+});
+
+// ─── GUI inject options forwarding ────────────────────────────────────────────
+
+describe('POST /api/process — inject options from GUI', () => {
+  it('inject fields are forwarded to removeMetadataSync', async () => {
+    const options = {
+      preserveColorProfile: false,
+      inject: {
+        copyright: '© 2025 Test',
+        artist: 'Jane',
+        software: 'HB Scrub',
+        imageDescription: 'Test image',
+        dateTime: '2025-01-15T10:30:00',
+      },
+    };
+    await jsonPost('/api/process', { name: 'photo.jpg', data: SAMPLE_B64, options });
+    const [, received] = (removeMetadataSync as Mock).mock.calls[0] as [Uint8Array, Record<string, unknown>];
+    expect(received).toMatchObject({ inject: options.inject });
+  });
+
+  it('works without inject option (backward compat)', async () => {
+    await jsonPost('/api/process', {
+      name: 'photo.jpg',
+      data: SAMPLE_B64,
+      options: { preserveColorProfile: false },
+    });
+    const [, received] = (removeMetadataSync as Mock).mock.calls[0] as [Uint8Array, Record<string, unknown>];
+    expect(received['inject']).toBeUndefined();
   });
 });
 

@@ -21,7 +21,7 @@
  */
 
 import { detectFormat } from '../detect.js';
-import { normalizeInput } from './remove.js';
+import { normalizeInput } from '../binary/normalize.js';
 import type { ReadResult, MetadataMap, SupportedFormat } from '../types.js';
 
 import { jpeg } from '../formats/jpeg.js';
@@ -69,13 +69,20 @@ const readers: Partial<Record<SupportedFormat, FormatReader>> = {
 export function readMetadataSync(input: Uint8Array | ArrayBuffer | string): ReadResult {
   const data = normalizeInput(input);
   const format = detectFormat(data);
+  const warnings: string[] = [];
 
   const reader = readers[format];
-  const partial: Partial<MetadataMap> = reader ? reader.read(data) : {};
+  let partial: Partial<MetadataMap> = {};
+  try {
+    partial = reader ? reader.read(data) : {};
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    warnings.push(`Metadata read error: ${msg}`);
+  }
 
   const metadata: MetadataMap = { format, ...partial };
 
-  return { metadata, format, fileSize: data.length };
+  return { metadata, format, fileSize: data.length, warnings };
 }
 
 /**

@@ -156,6 +156,14 @@ const HTML = `<!DOCTYPE html>
     <!-- Sidebar options -->
     <aside>
       <div class="panel">
+        <div class="panel-title">Profile</div>
+        <select id="opt-profile" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:0.85rem;margin-bottom:12px;">
+          <option value="custom" selected>Custom</option>
+          <option value="privacy">Privacy (strip everything)</option>
+          <option value="sharing">Sharing (keep color &amp; orientation)</option>
+          <option value="archive">Archive (keep all except GPS)</option>
+        </select>
+
         <div class="panel-title">Options</div>
 
         <div class="option-group">
@@ -188,6 +196,24 @@ const HTML = `<!DOCTYPE html>
           <option value="city">City level (~1 km)</option>
           <option value="exact">Keep exact GPS</option>
         </select>
+
+        <hr style="border-color: var(--border); margin: 16px 0;" />
+        <details id="inject-panel">
+          <summary class="panel-title" style="cursor:pointer;">Inject Metadata</summary>
+          <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
+            <input type="text" id="inj-copyright" placeholder="Copyright (e.g. © 2025 Jane Smith)"
+              style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:0.82rem;box-sizing:border-box;" />
+            <input type="text" id="inj-artist" placeholder="Artist"
+              style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:0.82rem;box-sizing:border-box;" />
+            <input type="text" id="inj-software" placeholder="Software"
+              style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:0.82rem;box-sizing:border-box;" />
+            <input type="text" id="inj-description" placeholder="Image description"
+              style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:0.82rem;box-sizing:border-box;" />
+            <input type="text" id="inj-datetime" placeholder="Date/time (e.g. 2025-01-15T10:30:00)"
+              style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:0.82rem;box-sizing:border-box;" />
+            <div class="desc">Injected into scrubbed JPEG, PNG, and WebP files.</div>
+          </div>
+        </details>
       </div>
 
       <div class="panel" style="margin-top:16px;">
@@ -264,13 +290,47 @@ const HTML = `<!DOCTYPE html>
 
     // ── localStorage option persistence (#10) ────────────────────────────
     const OPT_IDS = ['opt-color', 'opt-copyright', 'opt-orientation', 'opt-title', 'opt-description'];
+    const INJ_IDS = ['inj-copyright', 'inj-artist', 'inj-software', 'inj-description', 'inj-datetime'];
     const RC_KEY = 'hbscrub-options';
+
+    // ── Profile definitions ───────────────────────────────────────────────
+    const PROFILES = {
+      privacy:  { 'opt-color': false, 'opt-copyright': false, 'opt-orientation': false, 'opt-title': false, 'opt-description': false, 'opt-gps': 'remove' },
+      sharing:  { 'opt-color': true,  'opt-copyright': false, 'opt-orientation': true,  'opt-title': false, 'opt-description': false, 'opt-gps': 'remove' },
+      archive:  { 'opt-color': true,  'opt-copyright': true,  'opt-orientation': true,  'opt-title': true,  'opt-description': true,  'opt-gps': 'remove' },
+    };
+
+    let profileChanging = false; // guard to avoid re-entrance
+
+    function applyProfile(name) {
+      const p = PROFILES[name];
+      if (!p) return;
+      profileChanging = true;
+      OPT_IDS.forEach(id => { $(id).checked = p[id]; });
+      $('opt-gps').value = p['opt-gps'];
+      profileChanging = false;
+      saveOptions();
+    }
+
+    function detectProfile() {
+      for (const [name, p] of Object.entries(PROFILES)) {
+        const match = OPT_IDS.every(id => $(id).checked === p[id]) && $('opt-gps').value === p['opt-gps'];
+        if (match) return name;
+      }
+      return 'custom';
+    }
+
+    $('opt-profile').addEventListener('change', function() {
+      if (this.value !== 'custom') applyProfile(this.value);
+    });
 
     function saveOptions() {
       try {
         const state = {};
         OPT_IDS.forEach(id => { state[id] = $(id).checked; });
         state['opt-gps'] = $('opt-gps').value;
+        state['opt-profile'] = $('opt-profile').value;
+        INJ_IDS.forEach(id => { state[id] = $(id).value; });
         localStorage.setItem(RC_KEY, JSON.stringify(state));
       } catch(e) { /* storage unavailable */ }
     }
@@ -282,12 +342,22 @@ const HTML = `<!DOCTYPE html>
         const state = JSON.parse(raw);
         OPT_IDS.forEach(id => { if (id in state) $(id).checked = state[id]; });
         if ('opt-gps' in state) $('opt-gps').value = state['opt-gps'];
+        if ('opt-profile' in state) $('opt-profile').value = state['opt-profile'];
+        INJ_IDS.forEach(id => { if (id in state) $(id).value = state[id]; });
       } catch(e) { /* ignore */ }
     }
 
+    // When any option changes manually, switch profile to "Custom"
+    function onManualOptionChange() {
+      if (profileChanging) return;
+      $('opt-profile').value = detectProfile();
+      saveOptions();
+    }
+
     // Attach change listeners to persist on every change
-    OPT_IDS.forEach(id => $(id).addEventListener('change', saveOptions));
-    $('opt-gps').addEventListener('change', saveOptions);
+    OPT_IDS.forEach(id => $(id).addEventListener('change', onManualOptionChange));
+    $('opt-gps').addEventListener('change', onManualOptionChange);
+    INJ_IDS.forEach(id => $(id).addEventListener('input', saveOptions));
     loadOptions();
 
     // ── Electron integration (#14 + #15) ─────────────────────────────────
@@ -634,7 +704,7 @@ const HTML = `<!DOCTYPE html>
 
     // ── Options ───────────────────────────────────────────────────────────
     function getOptions() {
-      return {
+      const opts = {
         preserveColorProfile:  $('opt-color').checked,
         preserveCopyright:     $('opt-copyright').checked,
         preserveOrientation:   $('opt-orientation').checked,
@@ -642,6 +712,23 @@ const HTML = `<!DOCTYPE html>
         preserveDescription:   $('opt-description').checked,
         gpsRedact:             $('opt-gps').value,
       };
+
+      // Collect inject fields (only include non-empty values)
+      const inject = {};
+      const injMap = {
+        'inj-copyright': 'copyright',
+        'inj-artist': 'artist',
+        'inj-software': 'software',
+        'inj-description': 'imageDescription',
+        'inj-datetime': 'dateTime',
+      };
+      for (const [id, key] of Object.entries(injMap)) {
+        const val = $(id).value.trim();
+        if (val) inject[key] = val;
+      }
+      if (Object.keys(inject).length > 0) opts.inject = inject;
+
+      return opts;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
@@ -688,6 +775,9 @@ const HTML = `<!DOCTYPE html>
 
 // ─── HTTP Server ─────────────────────────────────────────────────────────────
 
+/** Maximum request body size in bytes (default 50 MB, configurable via env). */
+const MAX_BODY_SIZE = parseInt(process.env['HB_SCRUB_MAX_BODY'] ?? '', 10) || 50 * 1024 * 1024;
+
 export function handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
   const parsedUrl = new URL(req.url ?? '/', 'http://localhost');
   const pathname = parsedUrl.pathname;
@@ -710,17 +800,41 @@ export function handleRequest(req: http.IncomingMessage, res: http.ServerRespons
   // ── POST helpers ─────────────────────────────────────────────────────────
   if (req.method === 'POST' && (pathname === '/api/process' || pathname === '/api/read')) {
     let body = '';
+    let bodySize = 0;
+    let aborted = false;
+
     req.on('data', (chunk: Buffer) => {
+      bodySize += chunk.length;
+      if (bodySize > MAX_BODY_SIZE) {
+        if (!aborted) {
+          aborted = true;
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: `Request body exceeds ${MAX_BODY_SIZE} byte limit` }));
+          req.destroy();
+        }
+        return;
+      }
       body += chunk.toString();
     });
     req.on('end', () => {
+      if (aborted) return;
+      let parsed: { name?: unknown; data?: unknown; options?: Record<string, unknown> };
       try {
-        const { name, data, options } = JSON.parse(body) as {
-          name: string;
-          data: string;
-          options?: Record<string, unknown>;
-        };
+        parsed = JSON.parse(body) as typeof parsed;
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON in request body' }));
+        return;
+      }
 
+      const { name, data, options } = parsed;
+      if (typeof name !== 'string' || typeof data !== 'string') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Missing required fields: name (string) and data (base64 string)' }));
+        return;
+      }
+
+      try {
         const bytes = Uint8Array.from(Buffer.from(data, 'base64'));
 
         if (pathname === '/api/read') {
@@ -746,6 +860,7 @@ export function handleRequest(req: http.IncomingMessage, res: http.ServerRespons
             name: outName,
             format: result.format,
             removed: result.removedMetadata,
+            warnings: result.warnings,
             data: Buffer.from(result.data).toString('base64'),
           })
         );
