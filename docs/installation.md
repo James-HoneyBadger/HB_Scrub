@@ -76,11 +76,90 @@ Or if installed locally in a project:
 
 ---
 
-## 3. Desktop App (Electron)
+## 3. Standalone Application (Linux)
+
+HB Scrub can be installed as a fully standalone system application — a CLI accessible from any terminal and a desktop GUI appearing under **Applications → Utility**. Once installed, no `npm`, `node`, or development tools are required for the desktop GUI (the CLI wrapper still uses the system `node`).
+
+### Prerequisites
+
+- Node.js ≥ 20.0.0 (required only for building and for the CLI)
+- Git (to clone the repository)
+- A Linux desktop environment (KDE, GNOME, XFCE, etc.)
+
+### Step 1: Clone and build
+
+```bash
+git clone https://github.com/James-HoneyBadger/HB_Scrub.git
+cd HB_Scrub
+npm install
+npm run build
+```
+
+### Step 2: Package the Electron app
+
+```bash
+# Detect architecture automatically
+ARCH=$(uname -m | sed 's/aarch64/arm64/;s/x86_64/x64/')
+npx @electron/packager . "HB Scrub" --platform=linux --arch=$ARCH --out=release --overwrite --asar
+```
+
+This creates a self-contained Electron application in `release/HB Scrub-linux-$ARCH/`.
+
+### Step 3: Install
+
+```bash
+sudo ./install.sh
+```
+
+The install script:
+- Installs the GUI app to `/opt/hb-scrub/gui/`
+- Installs the CLI and dependencies to `/opt/hb-scrub/cli/`
+- Creates `/usr/local/bin/hb-scrub` (CLI) and `/usr/local/bin/hb-scrub-gui` (GUI)
+- Installs [hb-scrub.desktop](../hb-scrub.desktop) to `/usr/share/applications/`
+- Installs icons to `/usr/share/icons/hicolor/` (16px–512px + SVG)
+- Updates the icon cache and desktop database
+
+If a previous installation exists, it is removed before the new one is installed.
+
+### Verify the installation
+
+```bash
+# CLI
+hb-scrub --version
+hb-scrub --help
+
+# GUI
+hb-scrub-gui
+```
+
+The desktop app appears under **Applications → Utility** in your desktop environment's application menu.
+
+### Uninstall
+
+```bash
+sudo ./uninstall.sh
+```
+
+This removes all installed files, symlinks, icons, and the desktop entry.
+
+### What gets installed
+
+| Component | Location |
+|---|---|
+| CLI wrapper script | `/usr/local/bin/hb-scrub` |
+| GUI launcher script | `/usr/local/bin/hb-scrub-gui` |
+| CLI runtime (dist + node_modules) | `/opt/hb-scrub/cli/` |
+| Electron GUI app | `/opt/hb-scrub/gui/` |
+| Desktop entry | `/usr/share/applications/hb-scrub.desktop` |
+| Icons (PNG 16–512 + SVG) | `/usr/share/icons/hicolor/*/apps/hb-scrub.*` |
+
+---
+
+## 4. Desktop App (Electron) — Run from Source
 
 HB_Scrub includes a standalone Electron desktop application — a full GUI with drag-and-drop, no browser or terminal required.
 
-### Option A: Run from source
+### Run from source (development)
 
 ```bash
 # Clone the repository
@@ -94,33 +173,9 @@ npm install
 npm run electron
 ```
 
-### Option B: Build a distributable package
-
-```bash
-# Linux — produces AppImage and .deb in release/
-npm run electron:build:linux
-
-# Windows — produces NSIS installer (.exe) in release/
-npm run electron:build:win
-
-# macOS — produces .dmg in release/
-npm run electron:build:mac
-
-# Current platform (auto-detect)
-npm run electron:build
-```
-
-Built packages are written to `release/`.
-
-### Desktop app requirements
-
-- **Linux**: No special deps. AppImage is portable; `.deb` installs via `dpkg -i`.
-- **Windows**: Installer handles all prerequisites.
-- **macOS**: Standard .dmg drag-to-Applications install.
-
 ---
 
-## 4. Local Web GUI (no Electron)
+## 5. Local Web GUI (no Electron)
 
 If you prefer to run the GUI in a browser without the Electron wrapper:
 
@@ -132,7 +187,7 @@ This builds the project and starts a local HTTP server at `http://localhost:3777
 
 ---
 
-## 5. Build from Source
+## 6. Build from Source
 
 ```bash
 git clone https://github.com/James-HoneyBadger/HB_Scrub.git
@@ -269,4 +324,4 @@ Kill the conflicting process or change the port in `electron/main.cjs` and `src/
 
 ---
 
-*Documentation for HB_Scrub v1.2.0 — © 2026 Honey Badger Universe*
+*Documentation for HB_Scrub v1.3.0 — © 2026 Honey Badger Universe*

@@ -253,6 +253,31 @@ export function getMetadataTypes(data: Uint8Array): string[] {
     types.push('Data attributes');
   }
 
+  // Enhanced checks for deeper SVG metadata detection
+  if (/\bdata:[^;]+;base64,/i.test(svgText)) {
+    types.push('Embedded data URI');
+  }
+
+  if (/<script[\s>]/i.test(svgText)) {
+    types.push('Embedded script');
+  }
+
+  if (/xlink:href\s*=\s*["'](?!#)/i.test(svgText)) {
+    types.push('External reference');
+  }
+
+  if (/<foreignObject[\s>]/i.test(svgText)) {
+    types.push('Foreign object');
+  }
+
+  if (/figma:/i.test(svgText)) {
+    types.push('Figma metadata');
+  }
+
+  if (/sketch:/i.test(svgText) || /vectornator:/i.test(svgText)) {
+    types.push('Design tool metadata');
+  }
+
   return [...new Set(types)];
 }
 

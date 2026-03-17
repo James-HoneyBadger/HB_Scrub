@@ -2,6 +2,7 @@ import { SupportedFormat } from './types.js';
 import * as buffer from './binary/buffer.js';
 import * as dataview from './binary/dataview.js';
 import { FILE_SIGNATURES } from './signatures.js';
+import { detectPlugin } from './plugins.js';
 
 /**
  * MP4 / MOV brand identifiers (from ftyp box)
@@ -164,6 +165,12 @@ export function detectFormat(data: Uint8Array): SupportedFormat {
   // SVG: XML-based, check for <svg or <?xml
   if (isSvg(data)) {
     return 'svg';
+  }
+
+  // Check registered plugins before giving up
+  const plugin = detectPlugin(data);
+  if (plugin) {
+    return plugin.name as SupportedFormat;
   }
 
   return 'unknown';

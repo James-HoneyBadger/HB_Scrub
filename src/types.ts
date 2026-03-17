@@ -151,6 +151,12 @@ export interface RemoveOptions {
    * Inject these fields into the cleaned output (JPEG, PNG).
    */
   inject?: MetadataInjectOptions;
+
+  /**
+   * Password for encrypted PDFs. If provided, the handler will attempt
+   * to decrypt the PDF before stripping metadata.
+   */
+  pdfPassword?: string;
 }
 
 /**
@@ -209,8 +215,8 @@ export interface VerifyResult {
   /**
    * Confidence level of the result.
    * - `'high'`   — format with complete metadata parsing (JPEG, PNG, WebP, TIFF, HEIC, AVIF)
-   * - `'medium'` — format with partial parsing (GIF, PDF, MP4/MOV, DNG, RAW)
-   * - `'low'`    — format where hidden metadata may exist beyond what we can detect (SVG, unknown)
+   * - `'medium'` — format with partial parsing (GIF, PDF, MP4/MOV, DNG, RAW, SVG)
+   * - `'low'`    — format where hidden metadata may exist beyond what we can detect (unknown)
    */
   confidence: 'high' | 'medium' | 'low';
   /**

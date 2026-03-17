@@ -60,13 +60,62 @@ const HIGH_CONFIDENCE_FORMATS = new Set<SupportedFormat>([
 ]);
 /** Formats with partial coverage (medium confidence). */
 const MEDIUM_CONFIDENCE_FORMATS = new Set<SupportedFormat>([
-  'gif', 'pdf', 'mp4', 'mov', 'dng', 'raw',
+  'gif', 'pdf', 'mp4', 'mov', 'dng', 'raw', 'svg',
 ]);
 
 function getConfidence(format: SupportedFormat): 'high' | 'medium' | 'low' {
   if (HIGH_CONFIDENCE_FORMATS.has(format)) return 'high';
   if (MEDIUM_CONFIDENCE_FORMATS.has(format)) return 'medium';
   return 'low';
+}
+
+/**
+ * Detect whether the file contains embedded JPEG thumbnail data in EXIF.
+ * Looks for EXIF tag 0x0201 (JPEGInterchangeFormat / ThumbnailOffset) which
+ * indicates an IFD1 thumbnail, then checks if there's a non-zero companion
+ * 0x0202 (JPEGInterchangeFormatLength).
+ */
+function hasThumbnailData(data: Uint8Array): boolean {
+  // Quick scan for the JPEG thumbnail EXIF tags embedded anywhere in the file.
+  // Tag 0x0201 = JPEGInterchangeFormat (thumbnail offset)
+  // Tag 0x0202 = JPEGInterchangeFormatLength
+  // These can appear in either byte order, so check both.
+  const be0201 = [0x02, 0x01];
+  const le0201 = [0x01, 0x02];
+  const be0202 = [0x02, 0x02];
+
+  for (let i = 0; i < data.length - 12; i++) {
+    // Check for tag 0x0201 in big-endian
+    if (data[i] === be0201[0] && data[i + 1] === be0201[1]) {
+      // Verify it looks like a TIFF tag entry (type should be LONG=4, count=1)
+      if (data[i + 2] === 0x00 && data[i + 3] === 0x04 &&
+          data[i + 4] === 0x00 && data[i + 5] === 0x00 &&
+          data[i + 6] === 0x00 && data[i + 7] === 0x01) {
+        // Check the value is non-zero (actual offset)
+        const val = (data[i + 8]! << 24) | (data[i + 9]! << 16) | (data[i + 10]! << 8) | data[i + 11]!;
+        if (val > 0) {
+          // Look for companion tag 0x0202 nearby
+          for (let j = Math.max(0, i - 120); j < Math.min(data.length - 2, i + 120); j++) {
+            if (data[j] === be0202[0] && data[j + 1] === be0202[1]) return true;
+          }
+        }
+      }
+    }
+    // Check for tag 0x0201 in little-endian
+    if (data[i] === le0201[0] && data[i + 1] === le0201[1]) {
+      if (data[i + 2] === 0x04 && data[i + 3] === 0x00 &&
+          data[i + 4] === 0x01 && data[i + 5] === 0x00 &&
+          data[i + 6] === 0x00 && data[i + 7] === 0x00) {
+        const val = data[i + 8]! | (data[i + 9]! << 8) | (data[i + 10]! << 16) | (data[i + 11]! << 24);
+        if (val > 0) {
+          for (let j = Math.max(0, i - 120); j < Math.min(data.length - 2, i + 120); j++) {
+            if (data[j] === 0x02 && data[j + 1] === 0x02) return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
 }
 
 /**
@@ -86,6 +135,16 @@ export function verifyCleanSync(input: Uint8Array | ArrayBuffer | string): Verif
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     warnings.push(`Verification error: ${msg}`);
+  }
+
+  // Check for residual JPEG thumbnail data in EXIF (IFD1 with embedded JPEG)
+  if (format === 'jpeg' || format === 'tiff' || format === 'heic' || format === 'avif') {
+    if (hasThumbnailData(data)) {
+      if (!remainingMetadata.includes('Thumbnail')) {
+        remainingMetadata.push('Thumbnail');
+      }
+      warnings.push('Embedded EXIF thumbnail detected — may leak original image preview');
+    }
   }
 
   return {

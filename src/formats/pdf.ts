@@ -259,6 +259,16 @@ export function remove(data: Uint8Array, _options: RemoveOptions = {}): Uint8Arr
   // Bail on encrypted PDFs
   const header = slice(data, 0, Math.min(data.length, 8192));
   if (isEncrypted(header)) {
+    if (_options.pdfPassword) {
+      // TODO: full PDF decryption is beyond the scope of this zero-dependency
+      // library.  When a password is supplied we still cannot strip metadata
+      // without first decrypting each object.  Throw a descriptive error so
+      // callers know the file was not silently skipped.
+      throw new Error(
+        'Encrypted PDF detected — metadata removal requires prior decryption. ' +
+        'Use an external tool (e.g. qpdf --decrypt) to remove encryption first, then re-run.',
+      );
+    }
     return result;
   }
 
@@ -310,6 +320,20 @@ export function getMetadataTypes(data: Uint8Array): string[] {
         types.push('Timestamps');
       }
     }
+  }
+
+  // Detect embedded file attachments (/EmbeddedFiles, /FileAttachment)
+  const fullText = slice(data, 0, data.length);
+  if (/\/EmbeddedFiles\s/.test(fullText) || /\/Type\s*\/Filespec/.test(fullText)) {
+    types.push('Embedded Files');
+  }
+  if (/\/Subtype\s*\/FileAttachment/.test(fullText)) {
+    types.push('File Attachments');
+  }
+
+  // Detect JavaScript actions
+  if (/\/JS\s/.test(fullText) || /\/JavaScript\s/.test(fullText)) {
+    types.push('JavaScript');
   }
 
   return [...new Set(types)];
