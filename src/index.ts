@@ -55,6 +55,19 @@ export {
   SvgParseError,
 } from './errors.js';
 
+// CLI exit codes
+export { EXIT_CODES } from './cli.js';
+export type { ExitCode } from './cli.js';
+
+// Plugin / format extension API
+export {
+  registerFormat,
+  unregisterFormat,
+  getPlugin,
+  getRegisteredFormats,
+} from './plugins.js';
+export type { FormatPlugin } from './plugins.js';
+
 // Format-specific exports for advanced usage
 export { jpeg } from './formats/jpeg.js';
 export { png } from './formats/png.js';
@@ -67,6 +80,14 @@ export { avif } from './formats/avif.js';
 export { pdf } from './formats/pdf.js';
 export { mp4 } from './formats/mp4.js';
 export { raw } from './formats/raw.js';
+
+// Security / steganography detection
+export { detectSteganography } from './security/stego.js';
+export type { StegoWarning } from './security/stego.js';
+
+// Internationalization
+export { t, setLocale, getLocale, getAvailableLocales } from './i18n.js';
+export type { Locale } from './i18n.js';
 
 // Binary utilities for advanced usage
 export * as buffer from './binary/buffer.js';

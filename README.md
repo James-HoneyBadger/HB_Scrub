@@ -84,18 +84,61 @@ const result = removeMetadataSync(imageBytes);
 
 ---
 
+## Standalone Installation (Linux)
+
+HB Scrub can be installed as a fully standalone application — both a system-wide CLI tool and a desktop GUI app under **Applications → Utility**. No `npm`, `node`, or development tools required after installation.
+
+### Quick Install
+
+```bash
+git clone https://github.com/James-HoneyBadger/HB_Scrub.git
+cd HB_Scrub
+npm install && npm run build
+npx @electron/packager . "HB Scrub" --platform=linux --arch=$(uname -m | sed 's/aarch64/arm64/;s/x86_64/x64/') --out=release --overwrite --asar
+sudo ./install.sh
+```
+
+After installation:
+
+```bash
+hb-scrub --help          # CLI — available system-wide
+hb-scrub-gui             # Launch the desktop GUI
+```
+
+The desktop app also appears under **Applications → Utility** in your desktop environment.
+
+### Uninstall
+
+```bash
+sudo ./uninstall.sh
+```
+
+### What gets installed
+
+| Component | Location |
+|---|---|
+| CLI wrapper | `/usr/local/bin/hb-scrub` |
+| GUI launcher | `/usr/local/bin/hb-scrub-gui` |
+| Application files | `/opt/hb-scrub/` |
+| Desktop entry | `/usr/share/applications/hb-scrub.desktop` |
+| Icons | `/usr/share/icons/hicolor/*/apps/hb-scrub.png` |
+
+Reinstalling automatically removes the previous version first.
+
+See [docs/installation.md](docs/installation.md) for detailed instructions including building from source and platform-specific notes.
+
+---
+
 ## Desktop App (Electron)
 
 HB_Scrub ships with a standalone Electron desktop application. No browser, no terminal, no configuration required.
 
 ```bash
-# Clone the repo and install dependencies
-git clone https://github.com/James-HoneyBadger/HB_Scrub.git
-cd HB_Scrub
-npm install
-
-# Launch the desktop app
+# Run from source (development)
 npm run electron
+
+# Or launch the installed app
+hb-scrub-gui
 ```
 
 ### Desktop App features
@@ -116,9 +159,11 @@ npm run electron
 To build a distributable package for your platform:
 
 ```bash
-npm run electron:build:linux   # AppImage + .deb
-npm run electron:build:win     # NSIS installer (.exe)
-npm run electron:build:mac     # .dmg
+# Package the Electron app
+npx @electron/packager . "HB Scrub" --platform=linux --arch=arm64 --out=release --overwrite --asar
+
+# Or run from source during development
+npm run electron
 ```
 
 Built packages are written to `release/`.

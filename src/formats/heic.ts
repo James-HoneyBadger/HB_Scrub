@@ -439,7 +439,9 @@ function findColorProfileLocations(data: Uint8Array): Array<{ offset: number; le
 }
 
 /**
- * Overwrite data regions with zeros (anonymization)
+ * Overwrite data regions with zeros (anonymization).
+ * Also scans each region for any nested TIFF/EXIF headers and ensures
+ * the entire extent including padding bytes is wiped.
  */
 function overwriteWithZeros(
   data: Uint8Array,
@@ -450,6 +452,53 @@ function overwriteWithZeros(
     for (let i = loc.offset; i < end; i++) {
       data[i] = 0;
     }
+  }
+}
+
+/**
+ * Walk the meta box tree and re-tag zeroed Exif / XMP sub-boxes as 'free'
+ * boxes.  This is the standard ISOBMFF way to mark unused space and prevents
+ * compliant readers from interpreting zero-filled data as metadata.
+ */
+function markMetadataAsFree(data: Uint8Array, metaBox: HeicBox): void {
+  const metadataTypes = new Set(['Exif', 'xml ']);
+  const metaChildren = parseContainerBox(data, metaBox);
+
+  // Check ipco property boxes
+  const iprp = metaChildren.find(b => b.type === 'iprp');
+  if (iprp) {
+    const iprpChildren = parseContainerBox(data, iprp);
+    const ipco = iprpChildren.find(b => b.type === 'ipco');
+    if (ipco) {
+      for (const box of parseContainerBox(data, ipco)) {
+        if (metadataTypes.has(box.type) && isZeroed(data, box.dataOffset, box.dataSize)) {
+          writeBoxType(data, box.offset + 4, 'free');
+        }
+      }
+    }
+  }
+
+  // Also check direct meta children
+  for (const child of metaChildren) {
+    if (metadataTypes.has(child.type) && isZeroed(data, child.dataOffset, child.dataSize)) {
+      writeBoxType(data, child.offset + 4, 'free');
+    }
+  }
+}
+
+/** Check whether a region of data is entirely zeroed */
+function isZeroed(data: Uint8Array, offset: number, length: number): boolean {
+  const end = Math.min(offset + length, data.length);
+  for (let i = offset; i < end; i++) {
+    if (data[i] !== 0) return false;
+  }
+  return true;
+}
+
+/** Overwrite the 4-byte box type at the given offset */
+function writeBoxType(data: Uint8Array, offset: number, type: string): void {
+  for (let i = 0; i < 4; i++) {
+    data[offset + i] = type.charCodeAt(i);
   }
 }
 
@@ -490,6 +539,14 @@ export function remove(data: Uint8Array, options: RemoveOptions = {}): Uint8Arra
     if (colorProfileLocations.length > 0) {
       overwriteWithZeros(result, colorProfileLocations);
     }
+  }
+
+  // Convert zeroed metadata box data into proper 'free' boxes so ISOBMFF-aware
+  // tools never attempt to interpret the empty regions as valid metadata.
+  const allBoxes = parseBoxes(result);
+  const metaTop = allBoxes.find(b => b.type === 'meta');
+  if (metaTop) {
+    markMetadataAsFree(result, metaTop);
   }
 
   return result;

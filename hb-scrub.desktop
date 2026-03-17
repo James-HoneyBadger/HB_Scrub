@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=HB Scrub
+GenericName=Metadata Remover
+Comment=Remove EXIF, GPS & metadata from images and documents
+Exec=/opt/hb-scrub/hb-scrub-gui
+Icon=hb-scrub
+Terminal=false
+Type=Application
+Categories=Utility;
+Keywords=metadata;exif;gps;privacy;scrub;image;pdf;
+StartupNotify=true
+StartupWMClass=HB Scrub
+MimeType=image/jpeg;image/png;image/gif;image/webp;image/tiff;image/heic;image/avif;image/svg+xml;application/pdf;

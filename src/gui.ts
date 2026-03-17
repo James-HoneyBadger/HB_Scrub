@@ -38,6 +38,14 @@ const HTML = `<!DOCTYPE html>
       --muted: #8891b4;
       --radius: 10px;
     }
+    :root.light {
+      --bg: #f5f5f8;
+      --surface: #ffffff;
+      --surface2: #e8eaf0;
+      --border: #d0d4e0;
+      --text: #1a1d27;
+      --muted: #5c6380;
+    }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -149,7 +157,11 @@ const HTML = `<!DOCTYPE html>
       <div class="logo">🛡 HB Scrub</div>
       <div class="tagline">Strip EXIF, GPS &amp; metadata from your files — privately, locally</div>
     </div>
-    <div class="header-right">All processing happens on this machine. No data leaves your computer.</div>
+    <div class="header-right">
+      <span>All processing happens on this machine. No data leaves your computer.</span>
+      <button id="theme-toggle" title="Toggle light/dark mode"
+        style="margin-left:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.85rem;">🌙</button>
+    </div>
   </header>
 
   <div class="main">
@@ -214,6 +226,16 @@ const HTML = `<!DOCTYPE html>
             <div class="desc">Injected into scrubbed JPEG, PNG, and WebP files.</div>
           </div>
         </details>
+
+        <hr style="border-color: var(--border); margin: 16px 0;" />
+        <details id="pdf-panel">
+          <summary class="panel-title" style="cursor:pointer;">PDF Options</summary>
+          <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
+            <input type="password" id="pdf-password" placeholder="Password for encrypted PDFs"
+              style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:0.82rem;box-sizing:border-box;" />
+            <div class="desc">If the PDF is encrypted, provide the password here.</div>
+          </div>
+        </details>
       </div>
 
       <div class="panel" style="margin-top:16px;">
@@ -272,6 +294,20 @@ const HTML = `<!DOCTYPE html>
   <script>
   (function() {
     const $ = id => document.getElementById(id);
+
+    // ── Theme toggle ──
+    const themeBtn = $('theme-toggle');
+    const savedTheme = localStorage.getItem('hb-scrub-theme');
+    if (savedTheme === 'light' || (!savedTheme && window.matchMedia('(prefers-color-scheme: light)').matches)) {
+      document.documentElement.classList.add('light');
+      themeBtn.textContent = '☀️';
+    }
+    themeBtn.addEventListener('click', () => {
+      const isLight = document.documentElement.classList.toggle('light');
+      themeBtn.textContent = isLight ? '☀️' : '🌙';
+      localStorage.setItem('hb-scrub-theme', isLight ? 'light' : 'dark');
+    });
+
     const dropZone   = $('drop-zone');
     const fileInput  = $('file-input');
     const tbody      = $('file-tbody');
@@ -401,12 +437,52 @@ const HTML = `<!DOCTYPE html>
     });
 
     // ── Drop zone ─────────────────────────────────────────────────────────
+    // ── Folder drag-drop support ────────────────────────────────────────
+    function readEntries(reader) {
+      return new Promise((resolve, reject) => {
+        reader.readEntries(resolve, reject);
+      });
+    }
+    function fileFromEntry(entry) {
+      return new Promise((resolve, reject) => {
+        entry.file(resolve, reject);
+      });
+    }
+    async function collectFilesFromEntries(entries, out) {
+      for (const entry of entries) {
+        if (entry.isFile) {
+          try { out.push(await fileFromEntry(entry)); } catch {}
+        } else if (entry.isDirectory) {
+          const reader = entry.createReader();
+          let batch;
+          do {
+            batch = await readEntries(reader);
+            await collectFilesFromEntries(batch, out);
+          } while (batch.length > 0);
+        }
+      }
+    }
+
     dropZone.addEventListener('click', () => fileInput.click());
     dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('hover'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('hover'));
-    dropZone.addEventListener('drop', e => {
+    dropZone.addEventListener('drop', async e => {
       e.preventDefault();
       dropZone.classList.remove('hover');
+      // Support folder drops via webkitGetAsEntry
+      if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+        const allFiles = [];
+        const entries = [];
+        for (const item of e.dataTransfer.items) {
+          const entry = item.webkitGetAsEntry && item.webkitGetAsEntry();
+          if (entry) entries.push(entry);
+        }
+        if (entries.some(e => e.isDirectory)) {
+          await collectFilesFromEntries(entries, allFiles);
+          addFiles(allFiles);
+          return;
+        }
+      }
       addFiles(Array.from(e.dataTransfer.files));
     });
     fileInput.addEventListener('change', () => addFiles(Array.from(fileInput.files)));
@@ -541,6 +617,18 @@ const HTML = `<!DOCTYPE html>
 
           setStatus(id, 'done', 'Clean');
           renderMetaTags(id);
+
+          // Show before/after size comparison
+          const cleanedBytes = Math.ceil(json.data.length * 3 / 4); // base64 ➜ bytes
+          const sizeCell = document.querySelector('#row-' + id + ' td:nth-child(2)');
+          if (sizeCell) {
+            const diff = entry.file.size - cleanedBytes;
+            const pct = entry.file.size > 0 ? ((diff / entry.file.size) * 100).toFixed(1) : '0';
+            const diffStr = diff > 0 ? \`<span style="color:var(--green);font-size:0.72rem;"> (-\${fmtSize(diff)}, \${pct}%)</span>\`
+                          : diff < 0 ? \`<span style="color:var(--red);font-size:0.72rem;"> (+\${fmtSize(-diff)})</span>\`
+                          : '';
+            sizeCell.innerHTML = \`<span class="file-size">\${fmtSize(entry.file.size)} → \${fmtSize(cleanedBytes)}\${diffStr}</span>\`;
+          }
           const actionEl = $('action-' + id);
           if (actionEl) {
             actionEl.innerHTML = \`<button class="btn-dl" onclick="downloadFile(\${id})">⬇ Download</button>\`;
@@ -727,6 +815,9 @@ const HTML = `<!DOCTYPE html>
         if (val) inject[key] = val;
       }
       if (Object.keys(inject).length > 0) opts.inject = inject;
+
+      const pdfPw = $('pdf-password').value.trim();
+      if (pdfPw) opts.pdfPassword = pdfPw;
 
       return opts;
     }

@@ -39,6 +39,23 @@ import type {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+/**
+ * Structured CLI exit codes for scripting and CI integration.
+ *  0 = success
+ *  1 = partial failure (some files failed)
+ *  2 = total failure (all files failed)
+ *  3 = configuration / argument error
+ *  4 = no input files
+ */
+export const EXIT_CODES = {
+  SUCCESS: 0,
+  PARTIAL_FAILURE: 1,
+  TOTAL_FAILURE: 2,
+  CONFIG_ERROR: 3,
+  NO_INPUT: 4,
+} as const;
+export type ExitCode = (typeof EXIT_CODES)[keyof typeof EXIT_CODES];
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getVersion(): string {
@@ -140,6 +157,8 @@ BASIC
 METADATA INSPECTION
   --inspect                   Read and display metadata (no removal)
   --verify                    After scrubbing, re-verify output is clean
+  --stego-check               Scan for steganography indicators
+  --diff                      Show before/after metadata diff
 
 FIELD CONTROL
   --preserve-orientation      Keep EXIF orientation tag
@@ -161,6 +180,9 @@ INJECTION
   --inject-description <text> Inject image description into output
   --inject-datetime <text>    Inject date/time into output (ISO 8601 or TIFF format)
 
+PDF
+  --pdf-password <pass>       Password for encrypted PDFs
+
 PROFILES (shorthand option sets)
   --profile privacy           Strip GPS, device info, software; keep orientation + ICC
   --profile sharing           Strip GPS & device info; keep orientation, ICC, copyright
@@ -172,6 +194,8 @@ BATCH / DIRECTORY
   --dry-run                   Preview what would be done, write nothing
   --skip-existing             Skip files that already have an output
   --backup <suffix>           Back up originals (e.g. --backup .orig)
+  --include <glob>            Only process files matching glob (e.g. "*.jpg")
+  --exclude <glob>            Skip files matching glob (e.g. "*.svg")
 
 STDIN / STDOUT
   Pass '-' as file argument to read from stdin and write to stdout.
@@ -211,10 +235,15 @@ interface CliArgs {
   injectArtist?: string;
   injectDescription?: string;
   injectDatetime?: string;
+  pdfPassword?: string;
+  stegoCheck: boolean;
+  diff: boolean;
   concurrency: number;
   dryRun: boolean;
   skipExisting: boolean;
   backup?: string;
+  include?: string;
+  exclude?: string;
   report?: string;
   watchDir?: string;
   outputFormat: 'table' | 'json' | 'csv';
@@ -229,6 +258,8 @@ export function parseArgs(raw: string[]): CliArgs {
     quiet: false,
     inspect: false,
     verify: false,
+    stegoCheck: false,
+    diff: false,
     preserveOrientation: false,
     preserveColorProfile: false,
     preserveCopyright: false,
@@ -242,7 +273,7 @@ export function parseArgs(raw: string[]): CliArgs {
     const val = rawArr[i + 1];
     if (val === undefined || val.startsWith('-')) {
       console.error(`Error: ${flag} requires a value`);
-      process.exit(1);
+      process.exit(EXIT_CODES.CONFIG_ERROR);
     }
     return [i + 1, val];
   };
@@ -267,6 +298,12 @@ export function parseArgs(raw: string[]): CliArgs {
         break;
       case '--verify':
         args.verify = true;
+        break;
+      case '--stego-check':
+        args.stegoCheck = true;
+        break;
+      case '--diff':
+        args.diff = true;
         break;
       case '--preserve-orientation':
         args.preserveOrientation = true;
@@ -304,7 +341,7 @@ export function parseArgs(raw: string[]): CliArgs {
         const allowed = ['exact', 'city', 'region', 'country', 'remove'];
         if (!allowed.includes(v)) {
           console.error(`Error: --gps-redact must be one of: ${allowed.join(', ')}`);
-          process.exit(1);
+          process.exit(EXIT_CODES.CONFIG_ERROR);
         }
         args.gpsRedact = v as GpsRedactPrecision;
         break;
@@ -351,13 +388,19 @@ export function parseArgs(raw: string[]): CliArgs {
         args.injectDatetime = v;
         break;
       }
+      case '--pdf-password': {
+        const [ni, v] = take(i, a, raw);
+        i = ni;
+        args.pdfPassword = v;
+        break;
+      }
       case '--concurrency': {
         const [ni, v] = take(i, a, raw);
         i = ni;
         const n = parseInt(v, 10);
         if (isNaN(n) || n < 1) {
           console.error('Error: --concurrency must be a positive integer');
-          process.exit(1);
+          process.exit(EXIT_CODES.CONFIG_ERROR);
         }
         args.concurrency = n;
         break;
@@ -366,6 +409,18 @@ export function parseArgs(raw: string[]): CliArgs {
         const [ni, v] = take(i, a, raw);
         i = ni;
         args.backup = v;
+        break;
+      }
+      case '--include': {
+        const [ni, v] = take(i, a, raw);
+        i = ni;
+        args.include = v;
+        break;
+      }
+      case '--exclude': {
+        const [ni, v] = take(i, a, raw);
+        i = ni;
+        args.exclude = v;
         break;
       }
       case '--report': {
@@ -386,7 +441,7 @@ export function parseArgs(raw: string[]): CliArgs {
         const allowed = ['table', 'json', 'csv'];
         if (!allowed.includes(v)) {
           console.error(`Error: --output-format must be one of: ${allowed.join(', ')}`);
-          process.exit(1);
+          process.exit(EXIT_CODES.CONFIG_ERROR);
         }
         args.outputFormat = v as CliArgs['outputFormat'];
         break;
@@ -397,7 +452,7 @@ export function parseArgs(raw: string[]): CliArgs {
         const allowed = ['privacy', 'sharing', 'archive'];
         if (!allowed.includes(v)) {
           console.error(`Error: --profile must be one of: ${allowed.join(', ')}`);
-          process.exit(1);
+          process.exit(EXIT_CODES.CONFIG_ERROR);
         }
         args.profile = v as NonNullable<CliArgs['profile']>;
         break;
@@ -405,7 +460,7 @@ export function parseArgs(raw: string[]): CliArgs {
       default:
         if (a.startsWith('-')) {
           console.error(`Unknown option: ${a}`);
-          process.exit(1);
+          process.exit(EXIT_CODES.CONFIG_ERROR);
         }
         args.files.push(a);
     }
@@ -460,6 +515,18 @@ function startWatch(dirPath: string, batchOpts: BatchOptions, quiet: boolean): v
 }
 
 // ─── Input classification ─────────────────────────────────────────────────────
+
+/**
+ * Simple glob matching: supports `*` (any chars) and `?` (single char).
+ * Matches against the filename only (not path).
+ */
+function globMatch(name: string, pattern: string): boolean {
+  const re = pattern
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '.*')
+    .replace(/\?/g, '.');
+  return new RegExp(`^${re}$`, 'i').test(name);
+}
 
 async function classifyInputs(inputs: string[]): Promise<{ files: string[]; dirs: string[] }> {
   const files: string[] = [];
@@ -531,14 +598,16 @@ export function loadRcFile(): string[] {
   /** Known valid keys that map to CLI flags. */
   const VALID_KEYS = new Set([
     'in-place', 'output', 'suffix', 'recursive', 'quiet',
-    'inspect', 'verify',
+    'inspect', 'verify', 'stego-check', 'diff',
     'preserve-orientation', 'preserve-color-profile', 'preserve-copyright',
     'remove', 'keep',
     'gps-redact',
     'inject-copyright', 'inject-software', 'inject-artist',
     'inject-description', 'inject-datetime',
     'concurrency', 'dry-run', 'skip-existing', 'backup',
+    'include', 'exclude',
     'report', 'watch', 'output-format', 'profile',
+    'pdf-password',
   ]);
 
   for (const candidate of candidates) {
@@ -588,6 +657,7 @@ export function buildOptions(a: CliArgs): ProcessFileOptions & BatchOptions {
     ...(a.keep !== undefined && { keep: a.keep }),
     ...(a.gpsRedact !== undefined && { gpsRedact: a.gpsRedact }),
     ...(a.backup !== undefined && { backupSuffix: a.backup }),
+    ...(a.pdfPassword !== undefined && { pdfPassword: a.pdfPassword }),
   };
 
   if (
@@ -691,12 +761,23 @@ async function main(): Promise<void> {
 
   if (a.files.length === 0) {
     console.error('Error: No input files or directories specified');
-    process.exit(1);
+    process.exit(EXIT_CODES.NO_INPUT);
   }
 
-  const { files, dirs } = await classifyInputs(a.files);
+  let { files, dirs } = await classifyInputs(a.files);  
   let hasError = false;
   const allReports: AuditReport[] = [];
+
+  // Apply --include / --exclude glob filters
+  if (a.include || a.exclude) {
+    files = files.filter(f => {
+      if (f === '-') return true;
+      const name = basename(f);
+      if (a.include && !globMatch(name, a.include)) return false;
+      if (a.exclude && globMatch(name, a.exclude)) return false;
+      return true;
+    });
+  }
 
   // ── Stdin → stdout ──
   if (files.includes('-')) {
@@ -704,7 +785,7 @@ async function main(): Promise<void> {
       await processStdin(baseOpts);
     } catch (err) {
       console.error(`✗ stdin: ${err instanceof Error ? err.message : String(err)}`);
-      process.exit(1);
+      process.exit(EXIT_CODES.TOTAL_FAILURE);
     }
     return;
   }
@@ -723,7 +804,33 @@ async function main(): Promise<void> {
       }
     }
     if (hasError) {
-      process.exit(1);
+      process.exit(EXIT_CODES.PARTIAL_FAILURE);
+    }
+    return;
+  }
+
+  // ── Steganography check mode ──
+  if (a.stegoCheck) {
+    const { detectSteganography } = await import('./security/stego.js');
+    for (const f of files) {
+      try {
+        const data = new Uint8Array(await readFile(f));
+        const warnings = detectSteganography(data);
+        if (warnings.length === 0) {
+          if (!a.quiet) console.log(`✓ ${f}: no steganography indicators detected`);
+        } else {
+          for (const w of warnings) {
+            console.warn(`⚠ ${f}: [${w.code}] ${w.message}`);
+          }
+          hasError = true;
+        }
+      } catch (err) {
+        console.error(`✗ ${f}: ${err instanceof Error ? err.message : String(err)}`);
+        hasError = true;
+      }
+    }
+    if (hasError) {
+      process.exit(EXIT_CODES.PARTIAL_FAILURE);
     }
     return;
   }
@@ -777,7 +884,7 @@ async function main(): Promise<void> {
   // ── Individual files ──
   if (a.outputPath && files.length > 1) {
     console.error('Error: --output can only be used with a single input file');
-    process.exit(1);
+    process.exit(EXIT_CODES.CONFIG_ERROR);
   }
 
   const fileEntries: ProcessedEntry[] = [];
@@ -800,6 +907,16 @@ async function main(): Promise<void> {
         continue;
       }
 
+      // Capture before-metadata for diff mode
+      let beforeMeta: Partial<Record<string, unknown>> | undefined;
+      if (a.diff) {
+        try {
+          const beforeData = new Uint8Array(await readFile(f));
+          const { readMetadataSync } = await import('./operations/read.js');
+          beforeMeta = readMetadataSync(beforeData) as unknown as Partial<Record<string, unknown>>;
+        } catch { /* ignore read errors for diff */ }
+      }
+
       if (a.backup && a.inPlace) {
         await copyFile(f, f + a.backup);
       }
@@ -817,6 +934,27 @@ async function main(): Promise<void> {
             hasError = true;
           }
         } catch { /* skip verify on read error */ }
+      }
+
+      // Print before/after metadata diff
+      if (a.diff && beforeMeta && result.outputPath) {
+        try {
+          const afterData = new Uint8Array(await readFile(result.outputPath));
+          const { readMetadataSync } = await import('./operations/read.js');
+          const afterMeta = readMetadataSync(afterData) as unknown as Partial<Record<string, unknown>>;
+          const allKeys = new Set([...Object.keys(beforeMeta), ...Object.keys(afterMeta)]);
+          console.log(`\n  diff: ${f}`);
+          for (const key of [...allKeys].sort()) {
+            const before = beforeMeta[key];
+            const after = (afterMeta as Record<string, unknown>)[key];
+            const bStr = before !== undefined ? String(before) : '(absent)';
+            const aStr = after !== undefined ? String(after) : '(absent)';
+            if (bStr !== aStr) {
+              console.log(`    - ${key}: ${bStr}`);
+              console.log(`    + ${key}: ${aStr}`);
+            }
+          }
+        } catch { /* skip diff on read error */ }
       }
 
       fileEntries.push({
@@ -864,15 +1002,22 @@ async function main(): Promise<void> {
   }
 
   if (hasError) {
-    process.exit(1);
+    // Determine whether it was a partial or total failure
+    const totalProcessed = fileEntries.length + allReports.reduce((s, r) => s + r.totalFiles, 0);
+    const totalFailed = fileEntries.filter(e => e.error).length + allReports.reduce((s, r) => s + r.failed, 0);
+    process.exit(totalFailed >= totalProcessed ? EXIT_CODES.TOTAL_FAILURE : EXIT_CODES.PARTIAL_FAILURE);
   }
 }
 
 // ─── Entry ────────────────────────────────────────────────────────────────────
 
-if (process.argv[1] === __filename) {
+// Run when invoked directly. The argv[1] check accounts for Vite's code-splitting:
+// the entry file (hb-scrub.cli.js) re-exports from a chunk, so __filename points
+// to the chunk rather than argv[1]. We match both the exact path and the CLI entry name.
+const entryScript = process.argv[1] ?? '';
+if (entryScript === __filename || basename(entryScript).startsWith('hb-scrub.cli')) {
   main().catch((err: unknown) => {
     console.error(err instanceof Error ? err.message : String(err));
-    process.exit(1);
+    process.exit(EXIT_CODES.TOTAL_FAILURE);
   });
 }

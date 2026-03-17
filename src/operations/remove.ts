@@ -14,6 +14,7 @@ import { raw } from '../formats/raw.js';
 import { avif } from '../formats/avif.js';
 import { pdf } from '../formats/pdf.js';
 import { mp4 } from '../formats/mp4.js';
+import { getPlugin } from '../plugins.js';
 
 import { readExifBlock } from '../exif/reader.js';
 import {
@@ -195,6 +196,254 @@ function injectIntoWebp(data: Uint8Array, rawTiff: Uint8Array): Uint8Array {
   return newFile;
 }
 
+// ─── TIFF injection ──────────────────────────────────────────────────────────
+
+import type { MetadataInjectOptions } from '../types.js';
+
+/** Tag → TIFF tag number */
+const INJECT_TAGS: Record<string, number> = {
+  imageDescription: 270,
+  software: 305,
+  dateTime: 306,
+  artist: 315,
+  copyright: 33432,
+};
+
+/**
+ * Inject metadata into a TIFF file by writing new IFD entries with values
+ * appended at the end of the file.
+ */
+function injectIntoTiff(data: Uint8Array, inject: MetadataInjectOptions): Uint8Array {
+  const fields = Object.entries(inject).filter(([, v]) => v && String(v).trim().length > 0);
+  if (fields.length === 0) return data;
+
+  const littleEndian = data[0] === 0x49; // 'I' = little-endian
+  const ifdOffset = dataview.readUint32(data, 4, littleEndian);
+  if (ifdOffset + 2 > data.length) return data;
+
+  const numEntries = dataview.readUint16(data, ifdOffset, littleEndian);
+  const existingEnd = ifdOffset + 2 + numEntries * 12 + 4;
+
+  // Build new entries to append
+  const newEntries: Array<{ tag: number; value: Uint8Array }> = [];
+  const enc = new TextEncoder();
+  for (const [key, val] of fields) {
+    const tag = INJECT_TAGS[key];
+    if (!tag) continue;
+    const bytes = enc.encode(String(val) + '\x00');
+    newEntries.push({ tag, value: bytes });
+  }
+  if (newEntries.length === 0) return data;
+
+  // Append data: expanded IFD + value data at end of file
+  const valueData = newEntries.map(e => e.value);
+  const totalValueSize = valueData.reduce((s, v) => s + v.length + (v.length % 2), 0);
+  const newIfdEntryBytes = newEntries.length * 12;
+
+  // New file = original + space for new entries + value data
+  const result = new Uint8Array(data.length + newIfdEntryBytes + totalValueSize);
+  result.set(data);
+
+  // Rewrite IFD entry count
+  const newCount = numEntries + newEntries.length;
+  dataview.writeUint16(result, ifdOffset, newCount, littleEndian);
+
+  // Shift existing next-IFD pointer and any entries after it
+  const oldNextIfd = dataview.readUint32(data, existingEnd - 4, littleEndian);
+
+  // Write new entries at the end of existing entries
+  let entryPos = ifdOffset + 2 + numEntries * 12;
+  let valuePos = data.length + newIfdEntryBytes;
+
+  for (const entry of newEntries) {
+    dataview.writeUint16(result, entryPos, entry.tag, littleEndian);
+    dataview.writeUint16(result, entryPos + 2, 2, littleEndian); // ASCII type
+    dataview.writeUint32(result, entryPos + 4, entry.value.length, littleEndian);
+    if (entry.value.length <= 4) {
+      result.set(entry.value, entryPos + 8);
+    } else {
+      dataview.writeUint32(result, entryPos + 8, valuePos, littleEndian);
+      result.set(entry.value, valuePos);
+      valuePos += entry.value.length + (entry.value.length % 2);
+    }
+    entryPos += 12;
+  }
+
+  // Write next-IFD pointer after all entries
+  dataview.writeUint32(result, entryPos, oldNextIfd, littleEndian);
+
+  return result;
+}
+
+/**
+ * Inject metadata into a PDF by appending an /Info dictionary update.
+ * We append new string values directly into the existing Info dict's blanked fields.
+ */
+function injectIntoPdf(data: Uint8Array, inject: MetadataInjectOptions): Uint8Array {
+  const keyMap: Record<string, string> = {
+    copyright: 'Author',
+    artist: 'Author',
+    software: 'Producer',
+    imageDescription: 'Title',
+    dateTime: 'CreationDate',
+  };
+
+  // Build a simple Info dict supplement as a PDF comment block at end-of-file.
+  // Since the existing Info dict was blanked, we write values back into the file
+  // by searching for the blanked field patterns and filling them.
+  const result = new Uint8Array(data);
+  const text = new TextDecoder().decode(data);
+
+  for (const [key, val] of Object.entries(inject)) {
+    if (!val || !String(val).trim()) continue;
+    const pdfKey = keyMap[key];
+    if (!pdfKey) continue;
+    const safeVal = String(val).replace(/[()\\]/g, '');
+
+    // Find the blanked field: /Key (      ) — spaces of the original value length
+    const pattern = new RegExp(`/${pdfKey}\\s*\\(( +)\\)`);
+    const match = pattern.exec(text);
+    if (match && match.index !== undefined) {
+      const valueStart = text.indexOf('(', match.index) + 1;
+      const availableLen = match[1]!.length;
+      const writeVal = safeVal.slice(0, availableLen).padEnd(availableLen, ' ');
+      const enc = new TextEncoder();
+      const bytes = enc.encode(writeVal);
+      result.set(bytes, valueStart);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Inject metadata into an MP4/MOV by writing values into previously zeroed atoms.
+ */
+function injectIntoMp4(data: Uint8Array, inject: MetadataInjectOptions): Uint8Array {
+  const atomMap: Record<string, string> = {
+    copyright: '\u00a9cpy',
+    software: '\u00a9swr',
+    artist: '\u00a9aut',
+    imageDescription: '\u00a9des',
+    dateTime: '\u00a9day',
+  };
+
+  const result = new Uint8Array(data);
+
+  for (const [key, val] of Object.entries(inject)) {
+    if (!val || !String(val).trim()) continue;
+    const atomType = atomMap[key];
+    if (!atomType) continue;
+    const safeVal = String(val);
+    const atomTypeBytes = buffer.fromAscii(atomType);
+
+    // Find zeroed atoms of this type and write the value
+    for (let i = 0; i < result.length - 8; i++) {
+      if (
+        result[i + 4] === atomTypeBytes[0] &&
+        result[i + 5] === atomTypeBytes[1] &&
+        result[i + 6] === atomTypeBytes[2] &&
+        result[i + 7] === atomTypeBytes[3]
+      ) {
+        const atomSize = dataview.readUint32BE(result, i);
+        if (atomSize < 8 || i + atomSize > result.length) continue;
+        // Write value into atom data area (after 8-byte header + 16-byte QT string header)
+        const dataStart = i + 8 + 16;
+        const dataEnd = i + atomSize;
+        const available = dataEnd - dataStart;
+        if (available <= 0) continue;
+        const enc = new TextEncoder();
+        const bytes = enc.encode(safeVal.slice(0, available));
+        result.set(bytes, dataStart);
+        break;
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Inject metadata as a GIF comment extension block.
+ */
+function injectIntoGif(data: Uint8Array, inject: MetadataInjectOptions): Uint8Array {
+  // Build a comment string from inject fields
+  const parts: string[] = [];
+  if (inject.copyright) parts.push(`Copyright: ${inject.copyright}`);
+  if (inject.artist) parts.push(`Artist: ${inject.artist}`);
+  if (inject.software) parts.push(`Software: ${inject.software}`);
+  if (inject.imageDescription) parts.push(`Description: ${inject.imageDescription}`);
+  if (inject.dateTime) parts.push(`DateTime: ${inject.dateTime}`);
+  if (parts.length === 0) return data;
+
+  const comment = parts.join('; ');
+  const enc = new TextEncoder();
+  const commentBytes = enc.encode(comment);
+
+  // GIF comment extension: 0x21 0xFE, then sub-blocks (max 255 bytes each), then 0x00 terminator
+  const blocks: Uint8Array[] = [];
+  blocks.push(new Uint8Array([0x21, 0xfe])); // Extension introducer + comment label
+  for (let off = 0; off < commentBytes.length; off += 255) {
+    const chunk = commentBytes.subarray(off, Math.min(off + 255, commentBytes.length));
+    blocks.push(new Uint8Array([chunk.length]));
+    blocks.push(chunk);
+  }
+  blocks.push(new Uint8Array([0x00])); // Block terminator
+
+  const extension = buffer.concat(...blocks);
+
+  // Insert before GIF trailer (0x3B) which is the last byte
+  if (data[data.length - 1] !== 0x3b) return data;
+  const result = new Uint8Array(data.length - 1 + extension.length + 1);
+  result.set(data.subarray(0, data.length - 1));
+  result.set(extension, data.length - 1);
+  result[result.length - 1] = 0x3b; // GIF trailer
+  return result;
+}
+
+/**
+ * Inject metadata into an SVG by adding/replacing metadata elements.
+ */
+function injectIntoSvg(data: Uint8Array, inject: MetadataInjectOptions): Uint8Array {
+  const decoder = new TextDecoder('utf-8');
+  let svgText = decoder.decode(data);
+
+  // Build metadata XML block
+  const metaParts: string[] = [];
+  if (inject.copyright) metaParts.push(`    <dc:rights>${escapeXml(inject.copyright)}</dc:rights>`);
+  if (inject.artist) metaParts.push(`    <dc:creator>${escapeXml(inject.artist)}</dc:creator>`);
+  if (inject.imageDescription) metaParts.push(`    <dc:description>${escapeXml(inject.imageDescription)}</dc:description>`);
+  if (inject.software) metaParts.push(`    <dc:source>${escapeXml(inject.software)}</dc:source>`);
+  if (inject.dateTime) metaParts.push(`    <dc:date>${escapeXml(inject.dateTime)}</dc:date>`);
+  if (metaParts.length === 0) return data;
+
+  // Add title element if description is provided
+  if (inject.imageDescription) {
+    // Insert <title> after <svg...>
+    const svgClose = svgText.indexOf('>', svgText.indexOf('<svg'));
+    if (svgClose !== -1) {
+      const before = svgText.slice(0, svgClose + 1);
+      const after = svgText.slice(svgClose + 1);
+      svgText = before + `\n  <title>${escapeXml(inject.imageDescription)}</title>` + after;
+    }
+  }
+
+  // Insert <metadata> block with Dublin Core
+  const metaBlock = `\n  <metadata>\n    <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"\n             xmlns:dc="http://purl.org/dc/elements/1.1/">\n      <rdf:Description>\n${metaParts.join('\n')}\n      </rdf:Description>\n    </rdf:RDF>\n  </metadata>`;
+  const svgClose = svgText.indexOf('>', svgText.indexOf('<svg'));
+  if (svgClose !== -1) {
+    const before = svgText.slice(0, svgClose + 1);
+    const after = svgText.slice(svgClose + 1);
+    svgText = before + metaBlock + after;
+  }
+
+  return new TextEncoder().encode(svgText);
+}
+
+function escapeXml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 /**
  * Core removal logic shared between sync and async APIs
  */
@@ -209,6 +458,20 @@ function processRemoval(data: Uint8Array, rawOptions: RemoveOptions): RemoveResu
 
   const handler = handlers[format];
   if (!handler) {
+    // Check for registered plugin handlers
+    const plugin = getPlugin(format);
+    if (plugin) {
+      const removedMetadata = plugin.getMetadataTypes(data);
+      const cleanedData = plugin.remove(data, options);
+      return {
+        data: cleanedData,
+        format,
+        originalSize: data.length,
+        cleanedSize: cleanedData.length,
+        removedMetadata,
+        warnings: [],
+      };
+    }
     throw new UnsupportedFormatError(format);
   }
 
@@ -325,6 +588,16 @@ function processRemoval(data: Uint8Array, rawOptions: RemoveOptions): RemoveResu
         if (tiffBlock.length > 0) {
           cleanedData = injectIntoWebp(cleanedData, tiffBlock);
         }
+      } else if (format === 'tiff' || format === 'dng') {
+        cleanedData = injectIntoTiff(cleanedData, options.inject);
+      } else if (format === 'pdf') {
+        cleanedData = injectIntoPdf(cleanedData, options.inject);
+      } else if (format === 'mp4' || format === 'mov') {
+        cleanedData = injectIntoMp4(cleanedData, options.inject);
+      } else if (format === 'gif') {
+        cleanedData = injectIntoGif(cleanedData, options.inject);
+      } else if (format === 'svg') {
+        cleanedData = injectIntoSvg(cleanedData, options.inject);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
