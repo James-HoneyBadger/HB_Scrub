@@ -25,183 +25,396 @@ const HTML = `<!DOCTYPE html>
   <title>HB Scrub — Metadata Remover</title>
   <style>
     :root {
-      --bg: #0f1117;
-      --surface: #1a1d27;
-      --surface2: #22263a;
-      --border: #2e3350;
-      --accent: #f5a623;
-      --accent2: #e8913a;
-      --green: #4caf50;
-      --red: #e53935;
-      --yellow: #ffc107;
-      --text: #e8eaf6;
-      --muted: #8891b4;
-      --radius: 10px;
+      --bg: #0a0f1f;
+      --bg2: #10182c;
+      --surface: rgba(15, 22, 39, 0.92);
+      --surface2: rgba(27, 38, 65, 0.95);
+      --surface3: rgba(37, 50, 82, 0.95);
+      --border: rgba(110, 134, 191, 0.24);
+      --accent: #f7b24d;
+      --accent2: #ff8f5b;
+      --green: #4dd39d;
+      --red: #ff6f7d;
+      --yellow: #ffd166;
+      --blue: #7ab8ff;
+      --text: #eef3ff;
+      --muted: #98a7c9;
+      --radius: 18px;
+      --shadow: 0 18px 60px rgba(0,0,0,0.32);
     }
     :root.light {
-      --bg: #f5f5f8;
-      --surface: #ffffff;
-      --surface2: #e8eaf0;
-      --border: #d0d4e0;
-      --text: #1a1d27;
-      --muted: #5c6380;
+      --bg: #f3f6fb;
+      --bg2: #eaf0f9;
+      --surface: rgba(255, 255, 255, 0.95);
+      --surface2: rgba(242, 246, 255, 0.98);
+      --surface3: rgba(232, 239, 251, 0.98);
+      --border: rgba(74, 92, 145, 0.18);
+      --text: #172033;
+      --muted: #5f6f93;
+      --shadow: 0 18px 50px rgba(61, 81, 140, 0.12);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(247,178,77,0.10), transparent 0 28%),
+        radial-gradient(circle at top right, rgba(122,184,255,0.10), transparent 0 30%),
+        linear-gradient(180deg, var(--bg), var(--bg2));
       color: var(--text);
       min-height: 100vh;
+      line-height: 1.45;
     }
-    /* ── Header ── */
     header {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 18px 32px;
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 16px;
+      padding: 22px 28px;
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(10, 15, 31, 0.72);
     }
-    .logo { font-size: 1.5rem; font-weight: 800; color: var(--accent); letter-spacing: -1px; }
-    .tagline { font-size: 0.85rem; color: var(--muted); }
-    .header-right { margin-left: auto; font-size: 0.8rem; color: var(--muted); }
-    /* ── Layout ── */
-    .main { display: grid; grid-template-columns: 280px 1fr; gap: 24px; padding: 28px 32px; max-width: 1400px; }
-    /* ── Panel ── */
-    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
-    .panel-title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 16px; }
-    /* ── Options ── */
-    .option-group { margin-bottom: 14px; }
-    .option-group label { display: flex; align-items: center; gap: 10px; font-size: 0.875rem; cursor: pointer; color: var(--text); }
-    .option-group input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
-    .option-group .desc { font-size: 0.75rem; color: var(--muted); margin-left: 26px; margin-top: 3px; }
-    /* ── Drop zone ── */
-    #drop-zone {
-      border: 2px dashed var(--border);
+    :root.light header { background: rgba(243, 246, 251, 0.82); }
+    .brand-stack { display: flex; flex-direction: column; gap: 2px; }
+    .logo { font-size: 1.55rem; font-weight: 900; color: var(--accent); letter-spacing: -0.04em; }
+    .tagline { font-size: 0.9rem; color: var(--muted); }
+    .header-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .privacy-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(77, 211, 157, 0.08);
+      color: var(--text);
+    }
+    .main {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      gap: 22px;
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 22px;
+    }
+    .sidebar, .workspace { display: flex; flex-direction: column; gap: 16px; }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 48px 24px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
+    }
+    .panel-title {
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+    .subtle-copy { font-size: 0.82rem; color: var(--muted); }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.4fr 0.9fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+    .hero-copy h1 {
+      font-size: clamp(1.5rem, 2vw, 2.2rem);
+      line-height: 1.1;
+      letter-spacing: -0.04em;
+      margin-bottom: 10px;
+    }
+    .hero-copy p { color: var(--muted); max-width: 62ch; }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      align-self: stretch;
+    }
+    .hero-chip {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      background: var(--surface2);
+      font-size: 0.8rem;
+      color: var(--text);
+    }
+    .hero-chip strong { display: block; margin-bottom: 4px; font-size: 0.95rem; }
+    .option-group { margin-bottom: 14px; }
+    .option-group label { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; cursor: pointer; color: var(--text); }
+    .option-group input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+    .option-group .desc { font-size: 0.75rem; color: var(--muted); margin-left: 26px; margin-top: 4px; }
+    .input, select {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 9px 10px;
+      border-radius: 10px;
+      font-size: 0.84rem;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px 16px;
+      box-shadow: var(--shadow);
+    }
+    .stat-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .stat-value {
+      font-size: 1.45rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+    #drop-zone {
+      border: 1.5px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 34px 22px;
       text-align: center;
       cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
-      background: var(--surface);
+      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+      background: linear-gradient(180deg, rgba(247,178,77,0.06), transparent), var(--surface);
+      box-shadow: var(--shadow);
     }
-    #drop-zone.hover, #drop-zone:hover { border-color: var(--accent); background: rgba(245,166,35,0.05); }
-    .drop-icon { font-size: 3rem; margin-bottom: 12px; }
-    .drop-title { font-size: 1rem; font-weight: 600; color: var(--text); margin-bottom: 6px; }
-    .drop-sub { font-size: 0.8rem; color: var(--muted); }
-    .drop-formats { font-size: 0.7rem; color: var(--muted); margin-top: 10px; }
-    /* ── File table ── */
-    #file-list { margin-top: 20px; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    thead tr { border-bottom: 1px solid var(--border); }
-    th { text-align: left; padding: 8px 10px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
-    td { padding: 10px 10px; border-bottom: 1px solid rgba(46,51,80,0.5); vertical-align: middle; }
+    #drop-zone.hover, #drop-zone:hover {
+      border-color: rgba(247,178,77,0.8);
+      background: linear-gradient(180deg, rgba(247,178,77,0.11), transparent), var(--surface);
+      transform: translateY(-1px);
+    }
+    .drop-icon { font-size: 2.8rem; margin-bottom: 10px; }
+    .drop-title { font-size: 1.15rem; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+    .drop-sub { font-size: 0.84rem; color: var(--muted); }
+    .drop-formats { font-size: 0.72rem; color: var(--muted); margin-top: 10px; }
+    .trust-row {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .trust-tag, .queue-note {
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--muted);
+      font-size: 0.74rem;
+    }
+    .action-bar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-top: 2px;
+      margin-bottom: 10px;
+    }
+    .action-left, .action-right { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .summary-text { font-size: 0.82rem; color: var(--muted); }
+    .toolbar-select { min-width: 150px; }
+    .btn {
+      padding: 9px 16px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      font-size: 0.86rem;
+      font-weight: 700;
+      transition: all 0.15s ease;
+    }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #151515; }
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.03); transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+    .btn-ghost, .btn-secondary, .btn-dl {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-ghost:hover, .btn-secondary:hover, .btn-dl:hover { border-color: rgba(247,178,77,0.7); color: var(--accent); }
+    .btn-dl { padding: 6px 11px; font-size: 0.76rem; }
+    .prog-wrap { height: 6px; background: var(--surface3); border-radius: 999px; overflow: hidden; margin: 6px 0 0; }
+    .prog-bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 999px; transition: width 0.3s; }
+    #file-list { margin-top: 14px; }
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 0.85rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    thead tr { background: rgba(122,184,255,0.06); }
+    th {
+      text-align: left;
+      padding: 10px 12px;
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    td { padding: 12px; border-bottom: 1px solid rgba(110, 134, 191, 0.12); vertical-align: middle; }
     tr:last-child td { border-bottom: none; }
-    .file-name { font-weight: 500; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-name { font-weight: 650; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .file-size { color: var(--muted); font-size: 0.8rem; }
     .badge {
-      display: inline-block; padding: 2px 8px; border-radius: 20px;
-      font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+      display: inline-block; padding: 3px 8px; border-radius: 999px;
+      font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
     }
-    .badge-format { background: var(--surface2); color: var(--accent); }
-    .badge-pending  { background: rgba(255,193,7,0.15); color: var(--yellow); }
-    .badge-done     { background: rgba(76,175,80,0.15); color: var(--green); }
-    .badge-error    { background: rgba(229,57,53,0.15); color: var(--red); }
-    .badge-reading  { background: rgba(100,120,255,0.15); color: #99a8ff; }
+    .badge-format { background: rgba(247,178,77,0.12); color: var(--accent); }
+    .badge-pending  { background: rgba(255,209,102,0.15); color: var(--yellow); }
+    .badge-done     { background: rgba(77,211,157,0.15); color: var(--green); }
+    .badge-error    { background: rgba(255,111,125,0.15); color: var(--red); }
+    .badge-reading  { background: rgba(122,184,255,0.15); color: var(--blue); }
     .metadata-tags { display: flex; flex-wrap: wrap; gap: 4px; }
-    .meta-tag { padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; background: var(--surface2); color: var(--muted); }
-    /* ── Buttons ── */
-    .btn {
-      padding: 9px 20px; border-radius: 8px; border: none; cursor: pointer;
-      font-size: 0.875rem; font-weight: 600; transition: all 0.15s;
+    .meta-tag { padding: 2px 7px; border-radius: 6px; font-size: 0.68rem; background: var(--surface2); color: var(--muted); }
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 0.86rem;
+      box-shadow: var(--shadow);
+      transform: translateY(80px);
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 999;
     }
-    .btn-primary { background: var(--accent); color: #111; }
-    .btn-primary:hover:not(:disabled) { background: var(--accent2); }
-    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn-ghost {
-      background: transparent; border: 1px solid var(--border);
-      color: var(--muted); font-size: 0.8rem; padding: 6px 14px;
-    }
-    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
-    .btn-dl { padding: 5px 12px; font-size: 0.75rem; border-radius: 6px; background: var(--surface2); color: var(--accent); border: 1px solid var(--border); cursor: pointer; font-weight: 600; }
-    .btn-dl:hover { background: var(--accent); color: #111; }
-    /* ── Top bar ── */
-    .action-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-    .action-left { display: flex; gap: 10px; align-items: center; }
-    /* ── Progress bar ── */
-    .prog-wrap { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 8px; }
-    .prog-bar { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s; }
-    /* ── Toast ── */
-    #toast { position: fixed; bottom: 28px; right: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; font-size: 0.875rem; box-shadow: 0 8px 32px rgba(0,0,0,0.5); transform: translateY(80px); opacity: 0; transition: all 0.3s; z-index: 999; }
     #toast.show { transform: translateY(0); opacity: 1; }
     #toast.success { border-left: 3px solid var(--green); }
     #toast.error   { border-left: 3px solid var(--red); }
-    /* ── Empty state ── */
-    .empty { text-align: center; padding: 48px; color: var(--muted); font-size: 0.9rem; }
-    /* ── Reduce button ── */
-    .btn-remove { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 1rem; padding: 2px 6px; border-radius: 4px; }
-    .btn-remove:hover { color: var(--red); background: rgba(229,57,53,0.1); }
-    /* ── Collapsible metadata ── */
+    .empty { text-align: center; padding: 36px 24px; color: var(--muted); font-size: 0.92rem; }
+    .btn-remove { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 1rem; padding: 2px 6px; border-radius: 6px; }
+    .btn-remove:hover { color: var(--red); background: rgba(255,111,125,0.10); }
     details summary { cursor: pointer; color: var(--muted); font-size: 0.78rem; list-style: none; }
     details summary::after { content: ' ▸'; }
     details[open] summary::after { content: ' ▾'; }
-    /* scrollbar */
-    ::-webkit-scrollbar { width: 6px; } 
+    .history-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .history-item {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface2);
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-size: 0.78rem;
+    }
+    .history-item span, .history-item small, .history-empty { color: var(--muted); }
+    ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    @media (max-width: 1100px) {
+      .main, .hero { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 760px) {
+      header { padding: 16px; align-items: flex-start; flex-direction: column; }
+      .main { padding: 14px; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .action-bar { flex-direction: column; align-items: stretch; }
+      .action-left, .action-right { width: 100%; }
+      .action-right > * { flex: 1; }
+    }
   </style>
 </head>
 <body>
   <header>
-    <div>
+    <div class="brand-stack">
       <div class="logo">🛡 HB Scrub</div>
-      <div class="tagline">Strip EXIF, GPS &amp; metadata from your files — privately, locally</div>
+      <div class="tagline">A polished, local-first workspace for private metadata cleanup</div>
     </div>
     <div class="header-right">
-      <span>All processing happens on this machine. No data leaves your computer.</span>
-      <button id="theme-toggle" title="Toggle light/dark mode"
-        style="margin-left:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.85rem;">🌙</button>
+      <span class="privacy-pill">Local processing only • nothing leaves this machine</span>
+      <button id="theme-toggle" title="Toggle light or dark mode"
+        style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 11px;border-radius:10px;cursor:pointer;font-size:0.9rem;">🌙</button>
     </div>
   </header>
 
   <div class="main">
-    <!-- Sidebar options -->
-    <aside>
+    <aside class="sidebar">
       <div class="panel">
-        <div class="panel-title">Profile</div>
-        <select id="opt-profile" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:0.85rem;margin-bottom:12px;">
+        <div class="panel-title">Profiles &amp; privacy controls</div>
+        <select id="opt-profile" class="input" style="margin-bottom:12px;">
           <option value="custom" selected>Custom</option>
           <option value="privacy">Privacy (strip everything)</option>
           <option value="sharing">Sharing (keep color &amp; orientation)</option>
           <option value="archive">Archive (keep all except GPS)</option>
         </select>
 
-        <div class="panel-title">Options</div>
+        <div class="panel-title">Saved presets</div>
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+          <select id="saved-presets" class="input" style="margin:0;flex:1;">
+            <option value="">Saved presets</option>
+          </select>
+          <button class="btn btn-ghost" id="btn-save-preset" style="white-space:nowrap;">Save</button>
+        </div>
 
         <div class="option-group">
           <label><input type="checkbox" id="opt-color" /> Preserve color profile</label>
-          <div class="desc">Keep ICC color data (recommended for print)</div>
+          <div class="desc">Useful for print and color-sensitive output.</div>
         </div>
         <div class="option-group">
           <label><input type="checkbox" id="opt-copyright" /> Preserve copyright</label>
-          <div class="desc">Retain copyright &amp; artist tags</div>
+          <div class="desc">Retain copyright and artist attribution metadata.</div>
         </div>
         <div class="option-group">
           <label><input type="checkbox" id="opt-orientation" /> Preserve orientation</label>
-          <div class="desc">Keep EXIF rotation flag</div>
+          <div class="desc">Keep camera rotation tags when required.</div>
         </div>
         <div class="option-group">
           <label><input type="checkbox" id="opt-title" /> Preserve title</label>
-          <div class="desc">Keep image title tag</div>
+          <div class="desc">Retain title metadata on compatible files.</div>
         </div>
         <div class="option-group">
           <label><input type="checkbox" id="opt-description" /> Preserve description</label>
-          <div class="desc">Keep image description tag</div>
+          <div class="desc">Keep descriptive text where needed.</div>
         </div>
 
         <hr style="border-color: var(--border); margin: 16px 0;" />
-        <div class="panel-title">GPS Precision</div>
-        <select id="opt-gps" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:0.85rem;">
+        <div class="panel-title">GPS precision</div>
+        <select id="opt-gps" class="input">
           <option value="remove" selected>Remove GPS entirely</option>
           <option value="country">Country level (~111 km)</option>
           <option value="region">Region level (~11 km)</option>
@@ -211,72 +424,113 @@ const HTML = `<!DOCTYPE html>
 
         <hr style="border-color: var(--border); margin: 16px 0;" />
         <details id="inject-panel">
-          <summary class="panel-title" style="cursor:pointer;">Inject Metadata</summary>
+          <summary class="panel-title" style="cursor:pointer;">Inject clean metadata</summary>
           <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
-            <input type="text" id="inj-copyright" placeholder="Copyright (e.g. © 2025 Jane Smith)"
-              style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:0.82rem;box-sizing:border-box;" />
-            <input type="text" id="inj-artist" placeholder="Artist"
-              style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:0.82rem;box-sizing:border-box;" />
-            <input type="text" id="inj-software" placeholder="Software"
-              style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:0.82rem;box-sizing:border-box;" />
-            <input type="text" id="inj-description" placeholder="Image description"
-              style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:0.82rem;box-sizing:border-box;" />
-            <input type="text" id="inj-datetime" placeholder="Date/time (e.g. 2025-01-15T10:30:00)"
-              style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:0.82rem;box-sizing:border-box;" />
-            <div class="desc">Injected into scrubbed JPEG, PNG, and WebP files.</div>
+            <input type="text" class="input" id="inj-copyright" placeholder="Copyright" />
+            <input type="text" class="input" id="inj-artist" placeholder="Artist" />
+            <input type="text" class="input" id="inj-software" placeholder="Software" />
+            <input type="text" class="input" id="inj-description" placeholder="Image description" />
+            <input type="text" class="input" id="inj-datetime" placeholder="Date/time" />
+            <div class="desc">Available for scrubbed JPEG, PNG, and WebP files.</div>
           </div>
         </details>
 
         <hr style="border-color: var(--border); margin: 16px 0;" />
         <details id="pdf-panel">
-          <summary class="panel-title" style="cursor:pointer;">PDF Options</summary>
+          <summary class="panel-title" style="cursor:pointer;">PDF options</summary>
           <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
-            <input type="password" id="pdf-password" placeholder="Password for encrypted PDFs"
-              style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:0.82rem;box-sizing:border-box;" />
-            <div class="desc">If the PDF is encrypted, provide the password here.</div>
+            <input type="password" class="input" id="pdf-password" placeholder="Password for encrypted PDFs" />
+            <div class="desc">Provide a password only when a PDF requires it.</div>
           </div>
         </details>
       </div>
 
-      <div class="panel" style="margin-top:16px;">
-        <div class="panel-title">Supported Formats</div>
+      <div class="panel">
+        <div class="panel-title">Supported formats</div>
         <div id="formats-list" style="display:flex;flex-wrap:wrap;gap:5px;"></div>
+      </div>
+
+      <div class="panel" id="session-history">
+        <div class="panel-title">Recent sessions</div>
+        <ul class="history-list" id="history-list">
+          <li class="history-empty">No recent cleanup sessions yet.</li>
+        </ul>
       </div>
     </aside>
 
-    <!-- Main content -->
-    <main>
-      <!-- Drop zone -->
+    <main class="workspace">
+      <section class="panel hero">
+        <div class="hero-copy">
+          <div class="eyebrow">Private metadata cleanup</div>
+          <h1>Inspect, clean, and export with a faster desktop workflow.</h1>
+          <p>Batch process photos, documents, and media locally with clearer status, smarter controls, and better visibility into what changed.</p>
+        </div>
+        <div class="hero-grid">
+          <div class="hero-chip"><strong>Zero upload</strong> Everything runs on-device.</div>
+          <div class="hero-chip"><strong>Batch ready</strong> Process entire sets in one pass.</div>
+          <div class="hero-chip"><strong>Readable results</strong> See what was removed and saved.</div>
+          <div class="hero-chip"><strong>Safer defaults</strong> Privacy-first presets are built in.</div>
+        </div>
+      </section>
+
+      <section class="stats-grid" id="stats-grid">
+        <div class="stat-card"><div class="stat-label">Files in session</div><div class="stat-value" id="stat-total">0</div></div>
+        <div class="stat-card"><div class="stat-label">Cleaned</div><div class="stat-value" id="stat-cleaned">0</div></div>
+        <div class="stat-card"><div class="stat-label">Still queued</div><div class="stat-value" id="stat-pending">0</div></div>
+        <div class="stat-card"><div class="stat-label">Space saved</div><div class="stat-value" id="stat-saved">0 B</div></div>
+      </section>
+
       <div id="drop-zone">
         <div class="drop-icon">📂</div>
         <div class="drop-title">Drop files here or click to browse</div>
-        <div class="drop-sub">Drag files from your file manager</div>
+        <div class="drop-sub">Drag from your file manager, paste from clipboard, or use the native picker</div>
         <div class="drop-formats">JPEG · PNG · WebP · GIF · SVG · TIFF · HEIC · AVIF · PDF · MP4 · MOV · RAW</div>
+        <div class="trust-row">
+          <span class="trust-tag">No re-uploading</span>
+          <span class="trust-tag">Local-only processing</span>
+          <span class="trust-tag">Built for batch cleanup</span>
+        </div>
       </div>
       <input type="file" id="file-input" multiple style="display:none"
         accept=".jpg,.jpeg,.png,.webp,.gif,.svg,.tiff,.tif,.heic,.heif,.avif,.pdf,.mp4,.mov,.dng,.raw,.nef,.cr2,.cr3,.arw,.orf,.rw2" />
 
-      <!-- Action bar -->
-      <div class="action-bar" style="margin-top:20px;">
+      <div class="action-bar">
         <div class="action-left">
           <button class="btn btn-primary" id="btn-scrub" disabled>🧹 Scrub All</button>
-          <button class="btn btn-ghost" id="btn-clear">Clear list</button>
-          <span id="file-count" style="font-size:0.8rem;color:var(--muted);"></span>
+          <button class="btn btn-ghost" id="btn-clear">Reset session</button>
+          <button class="btn btn-ghost" id="btn-clear-completed">Clear completed</button>
         </div>
-        <button class="btn btn-ghost" id="btn-dl-all" disabled>⬇ Download All</button>
+        <div class="action-right">
+          <select id="filter-status" class="toolbar-select">
+            <option value="all">All files</option>
+            <option value="queued">Queued</option>
+            <option value="done">Cleaned</option>
+            <option value="error">Needs attention</option>
+          </select>
+          <select id="sort-files" class="toolbar-select">
+            <option value="newest">Sort: newest first</option>
+            <option value="name">Sort: name</option>
+            <option value="size">Sort: largest first</option>
+            <option value="saved">Sort: biggest savings</option>
+            <option value="status">Sort: status</option>
+          </select>
+          <button class="btn btn-ghost" id="btn-export-report">Export report</button>
+          <button class="btn btn-ghost" id="btn-dl-all" disabled>⬇ Download All</button>
+        </div>
       </div>
+      <div class="summary-text" id="run-summary">No files queued yet.</div>
+      <div class="summary-text" id="file-count" style="margin-top:4px;"></div>
       <div class="prog-wrap"><div class="prog-bar" id="prog-bar" style="width:0%"></div></div>
 
-      <!-- File list -->
       <div id="file-list">
-        <div class="empty" id="empty-state">Add files above to get started</div>
+        <div class="empty" id="empty-state">Drop files above to begin a private cleanup session.</div>
         <table id="file-table" style="display:none">
           <thead>
             <tr>
               <th>File</th>
               <th>Size</th>
               <th>Format</th>
-              <th>Metadata Found</th>
+              <th>Metadata found</th>
               <th>Status</th>
               <th>Action</th>
               <th></th>
@@ -288,7 +542,6 @@ const HTML = `<!DOCTYPE html>
     </main>
   </div>
 
-  <!-- Toast -->
   <div id="toast"></div>
 
   <script>
@@ -308,19 +561,31 @@ const HTML = `<!DOCTYPE html>
       localStorage.setItem('hb-scrub-theme', isLight ? 'light' : 'dark');
     });
 
-    const dropZone   = $('drop-zone');
-    const fileInput  = $('file-input');
-    const tbody      = $('file-tbody');
-    const table      = $('file-table');
-    const emptyState = $('empty-state');
-    const btnScrub   = $('btn-scrub');
-    const btnClear   = $('btn-clear');
-    const btnDlAll   = $('btn-dl-all');
-    const fileCount  = $('file-count');
-    const progBar    = $('prog-bar');
-    const toast      = $('toast');
+    const dropZone          = $('drop-zone');
+    const fileInput         = $('file-input');
+    const tbody             = $('file-tbody');
+    const table             = $('file-table');
+    const emptyState        = $('empty-state');
+    const btnScrub          = $('btn-scrub');
+    const btnClear          = $('btn-clear');
+    const btnClearCompleted = $('btn-clear-completed');
+    const btnExportReport   = $('btn-export-report');
+    const btnDlAll          = $('btn-dl-all');
+    const btnSavePreset     = $('btn-save-preset');
+    const savedPresets      = $('saved-presets');
+    const fileCount         = $('file-count');
+    const runSummary        = $('run-summary');
+    const progBar           = $('prog-bar');
+    const toast             = $('toast');
+    const filterStatus      = $('filter-status');
+    const sortFiles         = $('sort-files');
+    const historyList       = $('history-list');
+    const statTotal         = $('stat-total');
+    const statCleaned       = $('stat-cleaned');
+    const statPending       = $('stat-pending');
+    const statSaved         = $('stat-saved');
 
-    // File registry: id -> { file, status, result, resultName, format, metadataTypes, removedTypes }
+    // File registry: id -> { file, status, result, resultName, format, metadataTypes, removedTypes, warnings, savedBytes }
     const files = new Map();
     let nextId = 0;
 
@@ -328,6 +593,8 @@ const HTML = `<!DOCTYPE html>
     const OPT_IDS = ['opt-color', 'opt-copyright', 'opt-orientation', 'opt-title', 'opt-description'];
     const INJ_IDS = ['inj-copyright', 'inj-artist', 'inj-software', 'inj-description', 'inj-datetime'];
     const RC_KEY = 'hbscrub-options';
+    const HISTORY_KEY = 'hbscrub-history';
+    const PRESET_KEY = 'hbscrub-custom-presets';
 
     // ── Profile definitions ───────────────────────────────────────────────
     const PROFILES = {
@@ -360,13 +627,53 @@ const HTML = `<!DOCTYPE html>
       if (this.value !== 'custom') applyProfile(this.value);
     });
 
+    function getCurrentPresetState() {
+      const state = {};
+      OPT_IDS.forEach(id => { state[id] = $(id).checked; });
+      state['opt-gps'] = $('opt-gps').value;
+      INJ_IDS.forEach(id => { state[id] = $(id).value; });
+      return state;
+    }
+
+    function applyPresetState(state) {
+      if (!state) return;
+      profileChanging = true;
+      OPT_IDS.forEach(id => { if (id in state) $(id).checked = !!state[id]; });
+      if ('opt-gps' in state) $('opt-gps').value = state['opt-gps'];
+      INJ_IDS.forEach(id => { if (id in state) $(id).value = state[id] || ''; });
+      $('opt-profile').value = 'custom';
+      profileChanging = false;
+      saveOptions();
+    }
+
+    function getSavedPresetItems() {
+      try {
+        return JSON.parse(localStorage.getItem(PRESET_KEY) || '{}');
+      } catch {
+        return {};
+      }
+    }
+
+    function renderSavedPresets() {
+      const items = getSavedPresetItems();
+      const names = Object.keys(items).sort((a, b) => a.localeCompare(b));
+      savedPresets.innerHTML = '';
+      const empty = document.createElement('option');
+      empty.value = '';
+      empty.textContent = 'Saved presets';
+      savedPresets.appendChild(empty);
+      names.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        savedPresets.appendChild(opt);
+      });
+    }
+
     function saveOptions() {
       try {
-        const state = {};
-        OPT_IDS.forEach(id => { state[id] = $(id).checked; });
-        state['opt-gps'] = $('opt-gps').value;
+        const state = getCurrentPresetState();
         state['opt-profile'] = $('opt-profile').value;
-        INJ_IDS.forEach(id => { state[id] = $(id).value; });
         localStorage.setItem(RC_KEY, JSON.stringify(state));
       } catch(e) { /* storage unavailable */ }
     }
@@ -387,14 +694,42 @@ const HTML = `<!DOCTYPE html>
     function onManualOptionChange() {
       if (profileChanging) return;
       $('opt-profile').value = detectProfile();
+      savedPresets.value = '';
       saveOptions();
     }
+
+    savedPresets.addEventListener('change', () => {
+      if (!savedPresets.value) return;
+      const items = getSavedPresetItems();
+      applyPresetState(items[savedPresets.value]);
+      showToast('Preset loaded: ' + savedPresets.value, 'success');
+    });
+
+    btnSavePreset.addEventListener('click', () => {
+      const name = (window.prompt('Save current settings as preset:', savedPresets.value || '') || '').trim();
+      if (!name) return;
+      const items = getSavedPresetItems();
+      items[name] = getCurrentPresetState();
+      try {
+        localStorage.setItem(PRESET_KEY, JSON.stringify(items));
+      } catch {
+        showToast('Unable to save preset in this environment', 'error');
+        return;
+      }
+      renderSavedPresets();
+      savedPresets.value = name;
+      showToast('Preset saved: ' + name, 'success');
+    });
 
     // Attach change listeners to persist on every change
     OPT_IDS.forEach(id => $(id).addEventListener('change', onManualOptionChange));
     $('opt-gps').addEventListener('change', onManualOptionChange);
-    INJ_IDS.forEach(id => $(id).addEventListener('input', saveOptions));
+    INJ_IDS.forEach(id => $(id).addEventListener('input', onManualOptionChange));
+    filterStatus.addEventListener('change', refreshUI);
+    sortFiles.addEventListener('change', refreshUI);
     loadOptions();
+    renderHistory();
+    renderSavedPresets();
 
     // ── Electron integration (#14 + #15) ─────────────────────────────────
     if (window.electronAPI) {
@@ -501,7 +836,18 @@ const HTML = `<!DOCTYPE html>
     function addFiles(fileList) {
       fileList.forEach(f => {
         const id = nextId++;
-        files.set(id, { file: f, status: 'pending', result: null, format: '…', metadataTypes: [], removedTypes: [] });
+        files.set(id, {
+          file: f,
+          status: 'pending',
+          result: null,
+          format: '…',
+          metadataTypes: [],
+          removedTypes: [],
+          warnings: [],
+          resultName: '',
+          savedBytes: 0,
+          createdAt: Date.now() + id,
+        });
         appendRow(id);
         readMeta(id);
       });
@@ -512,13 +858,14 @@ const HTML = `<!DOCTYPE html>
       const entry = files.get(id);
       const tr = document.createElement('tr');
       tr.id = 'row-' + id;
+      tr.dataset.status = entry.status;
       tr.innerHTML = \`
         <td><div class="file-name" title="\${entry.file.name}">\${entry.file.name}</div></td>
-        <td><span class="file-size">\${fmtSize(entry.file.size)}</span></td>
+        <td><span class="file-size" id="size-\${id}">\${fmtSize(entry.file.size)}</span></td>
         <td><span class="badge badge-format" id="fmt-\${id}">…</span></td>
         <td><div class="metadata-tags" id="meta-\${id}"><span class="badge badge-reading">reading…</span></div></td>
         <td><span class="badge badge-pending" id="status-\${id}">Pending</span></td>
-        <td id="action-\${id}">—</td>
+        <td id="action-\${id}"><span class="queue-note">Ready</span></td>
         <td><button class="btn-remove" title="Remove" onclick="removeFile(\${id})">✕</button></td>
       \`;
       tbody.appendChild(tr);
@@ -528,6 +875,22 @@ const HTML = `<!DOCTYPE html>
       files.delete(id);
       const row = $('row-' + id);
       if (row) row.remove();
+      refreshUI();
+    };
+
+    window.retryFile = function(id) {
+      const entry = files.get(id);
+      if (!entry) return;
+      entry.status = 'pending';
+      entry.result = null;
+      entry.resultName = '';
+      entry.savedBytes = 0;
+      entry.removedTypes = [];
+      entry.warnings = [];
+      setStatus(id, 'pending', 'Pending');
+      const actionEl = $('action-' + id);
+      if (actionEl) actionEl.innerHTML = '<span class="queue-note">Ready</span>';
+      renderMetaTags(id);
       refreshUI();
     };
 
@@ -590,14 +953,19 @@ const HTML = `<!DOCTYPE html>
     // ── Scrub all ─────────────────────────────────────────────────────────
     btnScrub.addEventListener('click', async () => {
       const opts = getOptions();
-      const pending = [...files.entries()].filter(([,e]) => e.status !== 'done');
+      const pending = [...files.entries()].filter(([, e]) => e.status !== 'done');
       if (!pending.length) return;
 
       btnScrub.disabled = true;
-      let done = 0;
+      let processed = 0;
+      let successCount = 0;
+      let errorCount = 0;
+      let savedThisRun = 0;
 
       for (const [id, entry] of pending) {
+        entry.status = 'reading';
         setStatus(id, 'reading', 'Processing…');
+        refreshUI();
         try {
           const b64 = await toBase64(entry.file);
           const res = await fetch('/api/process', {
@@ -612,40 +980,57 @@ const HTML = `<!DOCTYPE html>
           entry.result = json.data;
           entry.resultName = json.name;
           entry.removedTypes = json.removed || [];
-          // After scrub, remaining metadata is empty (clean)
           entry.metadataTypes = [];
+          entry.warnings = json.warnings || [];
 
-          setStatus(id, 'done', 'Clean');
-          renderMetaTags(id);
+          const cleanedBytes = Math.ceil(json.data.length * 3 / 4);
+          const diff = Math.max(entry.file.size - cleanedBytes, 0);
+          const pct = entry.file.size > 0 ? ((diff / entry.file.size) * 100).toFixed(1) : '0';
+          entry.savedBytes = diff;
+          savedThisRun += diff;
+          successCount++;
 
-          // Show before/after size comparison
-          const cleanedBytes = Math.ceil(json.data.length * 3 / 4); // base64 ➜ bytes
-          const sizeCell = document.querySelector('#row-' + id + ' td:nth-child(2)');
-          if (sizeCell) {
-            const diff = entry.file.size - cleanedBytes;
-            const pct = entry.file.size > 0 ? ((diff / entry.file.size) * 100).toFixed(1) : '0';
-            const diffStr = diff > 0 ? \`<span style="color:var(--green);font-size:0.72rem;"> (-\${fmtSize(diff)}, \${pct}%)</span>\`
-                          : diff < 0 ? \`<span style="color:var(--red);font-size:0.72rem;"> (+\${fmtSize(-diff)})</span>\`
-                          : '';
-            sizeCell.innerHTML = \`<span class="file-size">\${fmtSize(entry.file.size)} → \${fmtSize(cleanedBytes)}\${diffStr}</span>\`;
+          const sizeEl = $('size-' + id);
+          if (sizeEl) {
+            const diffStr = diff > 0
+              ? \` <span style="color:var(--green)">• saved \${fmtSize(diff)} (\${pct}%)</span>\`
+              : '';
+            sizeEl.innerHTML = \`\${fmtSize(entry.file.size)} → \${fmtSize(cleanedBytes)}\${diffStr}\`;
           }
+
+          setStatus(id, 'done', entry.warnings.length ? 'Clean + warning' : 'Clean');
+          renderMetaTags(id);
           const actionEl = $('action-' + id);
           if (actionEl) {
             actionEl.innerHTML = \`<button class="btn-dl" onclick="downloadFile(\${id})">⬇ Download</button>\`;
           }
-        } catch(e) {
+        } catch (e) {
           entry.status = 'error';
-          setStatus(id, 'error', 'Error');
+          entry.savedBytes = 0;
+          errorCount++;
+          setStatus(id, 'error', 'Needs review');
+          const actionEl = $('action-' + id);
+          if (actionEl) {
+            actionEl.innerHTML = \`<button class="btn-dl" onclick="retryFile(\${id})">↻ Retry</button>\`;
+          }
           console.error(e);
         }
-        done++;
-        progBar.style.width = Math.round((done / pending.length) * 100) + '%';
+        processed++;
+        progBar.style.width = Math.round((processed / pending.length) * 100) + '%';
+        refreshUI();
       }
 
       btnDlAll.disabled = ![...files.values()].some(e => e.status === 'done');
       btnScrub.disabled = false;
-      showToast(done + ' file(s) processed successfully', 'success');
-      setTimeout(() => { progBar.style.width = '0%'; }, 2000);
+      if (successCount > 0) {
+        recordSessionHistory({ files: pending.length, cleaned: successCount, errors: errorCount, savedBytes: savedThisRun });
+      }
+      showToast(
+        successCount + ' file(s) cleaned' + (errorCount ? ' • ' + errorCount + ' need attention' : ''),
+        errorCount ? 'error' : 'success'
+      );
+      setTimeout(() => { progBar.style.width = '0%'; }, 1800);
+      refreshUI();
     });
 
     // ── Download ─────────────────────────────────────────────────────────
@@ -788,6 +1173,54 @@ const HTML = `<!DOCTYPE html>
       files.clear();
       tbody.innerHTML = '';
       refreshUI();
+      showToast('Session reset', '');
+    });
+
+    btnClearCompleted.addEventListener('click', () => {
+      for (const [id, entry] of [...files.entries()]) {
+        if (entry.status === 'done') {
+          files.delete(id);
+          const row = $('row-' + id);
+          if (row) row.remove();
+        }
+      }
+      refreshUI();
+    });
+
+    btnExportReport.addEventListener('click', () => {
+      if (files.size === 0) {
+        showToast('No session data to export yet', 'error');
+        return;
+      }
+      const values = [...files.values()];
+      const report = {
+        generatedAt: new Date().toISOString(),
+        summary: {
+          total: values.length,
+          cleaned: values.filter(e => e.status === 'done').length,
+          queued: values.filter(e => e.status === 'pending' || e.status === 'reading').length,
+          errors: values.filter(e => e.status === 'error').length,
+          savedBytes: values.reduce((sum, e) => sum + (e.savedBytes || 0), 0),
+        },
+        files: values.map(e => ({
+          name: e.file.name,
+          size: e.file.size,
+          format: e.format,
+          status: e.status,
+          metadataFound: e.metadataTypes,
+          removedMetadata: e.removedTypes,
+          warnings: e.warnings || [],
+          savedBytes: e.savedBytes || 0,
+          resultName: e.resultName || null,
+        })),
+      };
+      const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'hb-scrub-session-report.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      showToast('Session report exported', 'success');
     });
 
     // ── Options ───────────────────────────────────────────────────────────
@@ -825,24 +1258,140 @@ const HTML = `<!DOCTYPE html>
     // ── Helpers ───────────────────────────────────────────────────────────
     function setStatus(id, type, text) {
       const el = $('status-' + id);
+      const row = $('row-' + id);
       if (!el) return;
-      el.className = 'badge badge-' + (type === 'reading' ? 'reading' : type === 'done' ? 'done' : type === 'error' ? 'error' : 'pending');
+      const normalized = type === 'reading' ? 'reading' : type === 'done' ? 'done' : type === 'error' ? 'error' : 'pending';
+      el.className = 'badge badge-' + normalized;
       el.textContent = text;
+      if (row) row.dataset.status = normalized;
+    }
+
+    function statusRank(status) {
+      return { reading: 0, pending: 1, error: 2, done: 3 }[status] ?? 9;
+    }
+
+    function getVisibleEntries() {
+      let entries = [...files.entries()];
+      if (filterStatus.value !== 'all') {
+        entries = entries.filter(([, entry]) => {
+          if (filterStatus.value === 'queued') return entry.status === 'pending' || entry.status === 'reading';
+          return entry.status === filterStatus.value;
+        });
+      }
+
+      entries.sort((a, b) => {
+        const ea = a[1];
+        const eb = b[1];
+        switch (sortFiles.value) {
+          case 'name':
+            return ea.file.name.localeCompare(eb.file.name);
+          case 'size':
+            return eb.file.size - ea.file.size;
+          case 'saved':
+            return (eb.savedBytes || 0) - (ea.savedBytes || 0);
+          case 'status':
+            return statusRank(ea.status) - statusRank(eb.status) || ea.file.name.localeCompare(eb.file.name);
+          case 'newest':
+          default:
+            return (eb.createdAt || 0) - (ea.createdAt || 0);
+        }
+      });
+      return entries;
+    }
+
+    function syncRows() {
+      const visibleEntries = getVisibleEntries();
+      const visibleIds = new Set(visibleEntries.map(([id]) => id));
+      for (const [id] of files.entries()) {
+        const row = $('row-' + id);
+        if (!row) continue;
+        row.style.display = visibleIds.has(id) ? '' : 'none';
+      }
+      visibleEntries.forEach(([id]) => {
+        const row = $('row-' + id);
+        if (row) tbody.appendChild(row);
+      });
+      return visibleEntries.length;
+    }
+
+    function updateDashboard() {
+      const values = [...files.values()];
+      const total = values.length;
+      const cleaned = values.filter(e => e.status === 'done').length;
+      const queued = values.filter(e => e.status === 'pending' || e.status === 'reading').length;
+      const errors = values.filter(e => e.status === 'error').length;
+      const saved = values.reduce((sum, e) => sum + (e.savedBytes || 0), 0);
+
+      statTotal.textContent = String(total);
+      statCleaned.textContent = String(cleaned);
+      statPending.textContent = String(queued);
+      statSaved.textContent = fmtSize(saved);
+      runSummary.textContent = total
+        ? cleaned + ' cleaned • ' + queued + ' queued' + (errors ? ' • ' + errors + ' need attention' : '')
+        : 'No files queued yet.';
+    }
+
+    function getHistoryItems() {
+      try {
+        return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      } catch {
+        return [];
+      }
+    }
+
+    function renderHistory() {
+      const items = getHistoryItems();
+      if (!items.length) {
+        historyList.innerHTML = '<li class="history-empty">No recent cleanup sessions yet.</li>';
+        return;
+      }
+      historyList.innerHTML = items.map(item => {
+        const when = new Date(item.at).toLocaleString();
+        const filesLabel = item.files + ' file' + (item.files !== 1 ? 's' : '');
+        return '<li class="history-item">'
+          + '<strong>' + filesLabel + '</strong>'
+          + '<span>' + item.cleaned + ' cleaned • ' + item.savedText + ' saved</span>'
+          + '<small>' + when + (item.errors ? ' • ' + item.errors + ' issues' : '') + '</small>'
+          + '</li>';
+      }).join('');
+    }
+
+    function recordSessionHistory(summary) {
+      try {
+        const items = getHistoryItems();
+        items.unshift({
+          at: new Date().toISOString(),
+          files: summary.files,
+          cleaned: summary.cleaned,
+          errors: summary.errors,
+          savedBytes: summary.savedBytes,
+          savedText: fmtSize(summary.savedBytes),
+        });
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, 6)));
+      } catch {
+        /* ignore storage errors */
+      }
+      renderHistory();
     }
 
     function refreshUI() {
       const count = files.size;
-      table.style.display      = count ? '' : 'none';
-      emptyState.style.display = count ? 'none' : '';
-      btnScrub.disabled        = count === 0;
-      fileCount.textContent    = count ? count + ' file' + (count !== 1 ? 's' : '') : '';
+      const visible = syncRows();
+      table.style.display = count && visible ? '' : 'none';
+      emptyState.style.display = visible ? 'none' : '';
+      emptyState.textContent = count ? 'No files match the current view.' : 'Drop files above to begin a private cleanup session.';
+      btnScrub.disabled = count === 0;
+      btnDlAll.disabled = ![...files.values()].some(e => e.status === 'done');
+      fileCount.textContent = count ? count + ' file' + (count !== 1 ? 's' : '') + ' in this session' : '';
       fileInput.value = '';
+      updateDashboard();
     }
 
     function fmtSize(bytes) {
-      if (bytes < 1024)       return bytes + ' B';
-      if (bytes < 1024*1024)  return (bytes/1024).toFixed(1) + ' KB';
-      return (bytes/(1024*1024)).toFixed(1) + ' MB';
+      if (!bytes) return '0 B';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     }
 
     function toBase64(file) {
@@ -856,7 +1405,7 @@ const HTML = `<!DOCTYPE html>
 
     function showToast(msg, type = '') {
       toast.textContent = msg;
-      toast.className   = 'show ' + type;
+      toast.className = 'show ' + type;
       setTimeout(() => { toast.className = ''; }, 3500);
     }
   })();
