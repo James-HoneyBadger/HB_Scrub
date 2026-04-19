@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=HB Scrub
 GenericName=Metadata Remover
-Comment=Remove EXIF, GPS & metadata from images and documents
+Comment=Remove EXIF, GPS & metadata from images and documents locally with the Tauri desktop app
 Exec=/opt/hb-scrub/hb-scrub-gui
 Icon=hb-scrub
 Terminal=false
@@ -9,5 +9,5 @@ Type=Application
 Categories=Utility;
 Keywords=metadata;exif;gps;privacy;scrub;image;pdf;
 StartupNotify=true
-StartupWMClass=HB Scrub
+StartupWMClass=hb-scrub-tauri
 MimeType=image/jpeg;image/png;image/gif;image/webp;image/tiff;image/heic;image/avif;image/svg+xml;application/pdf;

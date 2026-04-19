@@ -162,6 +162,43 @@ describe('GET /', () => {
     expect(html).toContain('id="inj-description"');
     expect(html).toContain('id="inj-datetime"');
   });
+
+  it('HTML contains the new stats dashboard', async () => {
+    const html = await fetch(`${baseUrl}/`).then((r) => r.text());
+    expect(html).toContain('id="stats-grid"');
+    expect(html).toContain('id="stat-total"');
+    expect(html).toContain('id="stat-cleaned"');
+    expect(html).toContain('id="stat-saved"');
+  });
+
+  it('HTML contains session history and workflow controls', async () => {
+    const html = await fetch(`${baseUrl}/`).then((r) => r.text());
+    expect(html).toContain('id="session-history"');
+    expect(html).toContain('id="filter-status"');
+    expect(html).toContain('id="sort-files"');
+    expect(html).toContain('id="btn-clear-completed"');
+  });
+
+  it('HTML contains saved preset controls and audit export', async () => {
+    const html = await fetch(`${baseUrl}/`).then((r) => r.text());
+    expect(html).toContain('id="saved-presets"');
+    expect(html).toContain('id="btn-save-preset"');
+    expect(html).toContain('id="btn-export-report"');
+  });
+
+  it('HTML contains first-run onboarding and trust content', async () => {
+    const html = await fetch(`${baseUrl}/`).then((r) => r.text());
+    expect(html).toContain('id="onboarding-panel"');
+    expect(html).toContain('id="btn-dismiss-onboarding"');
+    expect(html).toContain('id="privacy-commitment"');
+  });
+
+  it('HTML contains recent activity surfaces', async () => {
+    const html = await fetch(`${baseUrl}/`).then((r) => r.text());
+    expect(html).toContain('id="recent-files"');
+    expect(html).toContain('id="recent-folders"');
+    expect(html).toContain('id="status-banner"');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

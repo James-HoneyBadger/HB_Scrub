@@ -10,7 +10,7 @@ No re-encoding. No quality loss. Zero runtime dependencies.
 
 - **13 formats** — JPEG, PNG, WebP, GIF, SVG, TIFF, HEIC/HEIF, AVIF, PDF, MP4/MOV, DNG, RAW (CR2, NEF, ARW)
 - **Works everywhere** — browser, Node.js, Deno, Bun, and any bundler
-- **Standalone desktop app** — Electron GUI with native file dialog, system tray, watch-folder, and clipboard paste
+- **Standalone desktop app** — Tauri desktop shell for the local GUI, with the legacy Electron shell still available during the transition
 - **Binary manipulation** — metadata stripped at the byte level; pixels are never touched
 - **Read metadata** — inspect what's inside a file before removing anything
 - **GPS redaction** — truncate coordinates (and altitude) to city/region/country precision instead of stripping
@@ -93,8 +93,7 @@ HB Scrub can be installed as a fully standalone application — both a system-wi
 ```bash
 git clone https://github.com/James-HoneyBadger/HB_Scrub.git
 cd HB_Scrub
-npm install && npm run build
-npx @electron/packager . "HB Scrub" --platform=linux --arch=$(uname -m | sed 's/aarch64/arm64/;s/x86_64/x64/') --out=release --overwrite --asar
+npm install && npm run tauri:build
 sudo ./install.sh
 ```
 
@@ -106,6 +105,8 @@ hb-scrub-gui             # Launch the desktop GUI
 ```
 
 The desktop app also appears under **Applications → Utility** in your desktop environment.
+
+> Trust note: processing stays local on your machine. See the repository security page and code of conduct for reporting and community expectations.
 
 ### Uninstall
 
@@ -129,16 +130,16 @@ See [docs/installation.md](docs/installation.md) for detailed instructions inclu
 
 ---
 
-## Desktop App (Electron)
+## Desktop App (Tauri)
 
-HB_Scrub ships with a standalone Electron desktop application. No browser, no terminal, no configuration required.
+HB_Scrub now includes a Tauri desktop shell for local desktop use, with the older Electron shell still available as a fallback during the transition.
 
 ```bash
-# Run from source (development)
-npm run electron
+# Run the Tauri desktop shell
+npm run desktop
 
-# Or launch the installed app
-hb-scrub-gui
+# Legacy Electron shell
+npm run electron
 ```
 
 ### Desktop App features
@@ -156,13 +157,13 @@ hb-scrub-gui
 | Profile Selector | Quick-switch between Privacy, Sharing, and Archive presets via a dropdown |
 | Inject Metadata | Collapsible panel to inject copyright, artist, software, description, and date/time into scrubbed output |
 
-To build a distributable package for your platform:
+To build a distributable desktop package:
 
 ```bash
-# Package the Electron app
-npx @electron/packager . "HB Scrub" --platform=linux --arch=arm64 --out=release --overwrite --asar
+# Build the Tauri desktop app
+npm run tauri:build
 
-# Or run from source during development
+# Or run the legacy Electron shell during the transition
 npm run electron
 ```
 

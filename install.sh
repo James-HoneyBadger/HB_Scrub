@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
 # HB Scrub – Install Script
-# Installs HB Scrub as a standalone desktop + CLI application on Linux.
+# Installs HB Scrub as a standalone Tauri desktop + CLI application on Linux.
 # Run with:  sudo ./install.sh
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
@@ -23,24 +23,18 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-# ─── Detect architecture ─────────────────────────────────────────────────────
-ARCH="$(uname -m)"
-case "$ARCH" in
-  aarch64|arm64) ELECTRON_ARCH="arm64" ;;
-  x86_64|amd64)  ELECTRON_ARCH="x64" ;;
-  *)
-    echo "Error: Unsupported architecture: $ARCH" >&2
-    exit 1
-    ;;
-esac
+# ─── Resolve the Tauri desktop binary ────────────────────────────────────────
+TAURI_RELEASE_BIN="${SCRIPT_DIR}/src-tauri/target/release/hb-scrub-tauri"
+TAURI_DEBUG_BIN="${SCRIPT_DIR}/src-tauri/target/debug/hb-scrub-tauri"
+TAURI_BIN=""
 
-RELEASE_DIR="${SCRIPT_DIR}/release/HB Scrub-linux-${ELECTRON_ARCH}"
-
-# ─── Verify build artifacts exist ────────────────────────────────────────────
-if [[ ! -d "$RELEASE_DIR" ]]; then
-  echo "Error: Packaged app not found at: $RELEASE_DIR"
-  echo "Run 'npm run build' and then package the app first."
-  echo "  npx @electron/packager . 'HB Scrub' --platform=linux --arch=${ELECTRON_ARCH} --out=release --overwrite --asar"
+if [[ -f "$TAURI_RELEASE_BIN" ]]; then
+  TAURI_BIN="$TAURI_RELEASE_BIN"
+elif [[ -f "$TAURI_DEBUG_BIN" ]]; then
+  TAURI_BIN="$TAURI_DEBUG_BIN"
+else
+  echo "Error: Tauri desktop binary not found."
+  echo "Run 'npm run tauri:build' first, then re-run this installer."
   exit 1
 fi
 
@@ -63,12 +57,12 @@ done
 
 echo "Installing ${APP_LABEL} to ${INSTALL_DIR}..."
 
-# ─── Install the Electron GUI app ────────────────────────────────────────────
-mkdir -p "$INSTALL_DIR"
-cp -a "$RELEASE_DIR"/. "$INSTALL_DIR/gui/"
-
-# Rename the Electron binary for clarity
-mv "$INSTALL_DIR/gui/HB Scrub" "$INSTALL_DIR/gui/hb-scrub-electron"
+# ─── Install the Tauri GUI app ───────────────────────────────────────────────
+mkdir -p "$INSTALL_DIR/gui"
+cp "$TAURI_BIN" "$INSTALL_DIR/gui/hb-scrub-tauri"
+chmod 755 "$INSTALL_DIR/gui/hb-scrub-tauri"
+mkdir -p "$INSTALL_DIR/gui/dist"
+cp -a "${SCRIPT_DIR}/dist"/. "$INSTALL_DIR/gui/dist/"
 
 # ─── Install CLI components ──────────────────────────────────────────────────
 mkdir -p "$INSTALL_DIR/cli/dist"
@@ -97,8 +91,8 @@ chmod 755 "$INSTALL_DIR/hb-scrub"
 # GUI wrapper
 cat > "$INSTALL_DIR/hb-scrub-gui" << 'GUIWRAPPER'
 #!/usr/bin/env bash
-# Launch HB Scrub GUI (Electron)
-exec /opt/hb-scrub/gui/hb-scrub-electron --no-sandbox "$@"
+# Launch HB Scrub GUI (Tauri)
+exec /opt/hb-scrub/gui/hb-scrub-tauri "$@"
 GUIWRAPPER
 chmod 755 "$INSTALL_DIR/hb-scrub-gui"
 

@@ -1,0 +1,16 @@
+[package]
+name = "hb-scrub-tauri"
+version = "1.4.0"
+description = "HB Scrub desktop shell powered by Tauri"
+authors = ["James Temple <james@honey-badger.org>"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.77"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

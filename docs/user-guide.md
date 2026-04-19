@@ -26,11 +26,17 @@ This guide covers every way to use HB_Scrub: the desktop app, browser API, Node.
 
 ---
 
-## 1. Desktop App (Electron)
+## 1. Desktop App (Tauri)
 
 The desktop app provides a full graphical interface — no terminal, no browser tab, no configuration needed.
 
 ### Launching
+
+```bash
+npm run desktop
+```
+
+If you still need the legacy wrapper during the transition, you can also run:
 
 ```bash
 npm run electron
@@ -60,7 +66,7 @@ Or, if you have built a distributable package, launch it like any native applica
 
 ### Port note
 
-The desktop app runs an internal HTTP server on `localhost:3777`. If that port is in use, the app window will fail to load. See the [installation troubleshooting section](./installation.md#electron-app-window-does-not-appear).
+The desktop app uses a local HTTP service and prefers `localhost:3777`, but it now reuses an existing HB Scrub service or falls back to another local port when needed. See the troubleshooting section in [docs/installation.md](docs/installation.md) if the desktop window still does not appear.
 
 ---
 
