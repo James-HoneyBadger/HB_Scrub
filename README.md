@@ -94,7 +94,7 @@ HB Scrub can be installed as a fully standalone application — both a system-wi
 git clone https://github.com/James-HoneyBadger/HB_Scrub.git
 cd HB_Scrub
 npm install && npm run tauri:build
-sudo ./install.sh
+sudo ./scripts/install.sh
 ```
 
 After installation:
@@ -111,7 +111,7 @@ The desktop app also appears under **Applications → Utility** in your desktop 
 ### Uninstall
 
 ```bash
-sudo ./uninstall.sh
+sudo ./scripts/uninstall.sh
 ```
 
 ### What gets installed

@@ -1,6 +1,6 @@
 [package]
 name = "hb-scrub-tauri"
-version = "1.4.0"
+version = "1.4.1"
 description = "HB Scrub desktop shell powered by Tauri"
 authors = ["James Temple <james@honey-badger.org>"]
 license = "MIT"

@@ -98,14 +98,14 @@ npm run tauri:build
 ### Step 2: Install
 
 ```bash
-sudo ./install.sh
+sudo ./scripts/install.sh
 ```
 
 The install script:
 - Installs the Tauri GUI app to `/opt/hb-scrub/gui/`
 - Installs the CLI and dependencies to `/opt/hb-scrub/cli/`
 - Creates `/usr/local/bin/hb-scrub` (CLI) and `/usr/local/bin/hb-scrub-gui` (GUI)
-- Installs [hb-scrub.desktop](../hb-scrub.desktop) to `/usr/share/applications/`
+- Installs [packaging/linux/hb-scrub.desktop](../packaging/linux/hb-scrub.desktop) to `/usr/share/applications/`
 - Installs icons to `/usr/share/icons/hicolor/` (16px–512px + SVG)
 - Updates the icon cache and desktop database
 
@@ -127,7 +127,7 @@ The desktop app appears under **Applications → Utility** in your desktop envir
 ### Uninstall
 
 ```bash
-sudo ./uninstall.sh
+sudo ./scripts/uninstall.sh
 ```
 
 This removes all installed files, symlinks, icons, and the desktop entry.
