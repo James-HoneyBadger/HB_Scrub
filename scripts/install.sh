@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # HB Scrub – Install Script
 # Installs HB Scrub as a standalone Tauri desktop + CLI application on Linux.
-# Run with:  sudo ./install.sh
+# Run with:  sudo ./scripts/install.sh
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -16,6 +16,7 @@ ICON_SIZES=(16 32 48 64 128 256 512)
 
 # ─── Determine script and project directories ────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # ─── Require root ─────────────────────────────────────────────────────────────
 if [[ $EUID -ne 0 ]]; then
@@ -24,8 +25,8 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # ─── Resolve the Tauri desktop binary ────────────────────────────────────────
-TAURI_RELEASE_BIN="${SCRIPT_DIR}/src-tauri/target/release/hb-scrub-tauri"
-TAURI_DEBUG_BIN="${SCRIPT_DIR}/src-tauri/target/debug/hb-scrub-tauri"
+TAURI_RELEASE_BIN="${PROJECT_ROOT}/src-tauri/target/release/hb-scrub-tauri"
+TAURI_DEBUG_BIN="${PROJECT_ROOT}/src-tauri/target/debug/hb-scrub-tauri"
 TAURI_BIN=""
 
 if [[ -f "$TAURI_RELEASE_BIN" ]]; then
@@ -38,8 +39,8 @@ else
   exit 1
 fi
 
-if [[ ! -f "${SCRIPT_DIR}/dist/hb-scrub.cli.js" ]]; then
-  echo "Error: CLI build not found at: ${SCRIPT_DIR}/dist/hb-scrub.cli.js"
+if [[ ! -f "${PROJECT_ROOT}/dist/hb-scrub.cli.js" ]]; then
+  echo "Error: CLI build not found at: ${PROJECT_ROOT}/dist/hb-scrub.cli.js"
   echo "Run 'npm run build' first."
   exit 1
 fi
@@ -62,21 +63,21 @@ mkdir -p "$INSTALL_DIR/gui"
 cp "$TAURI_BIN" "$INSTALL_DIR/gui/hb-scrub-tauri"
 chmod 755 "$INSTALL_DIR/gui/hb-scrub-tauri"
 mkdir -p "$INSTALL_DIR/gui/dist"
-cp -a "${SCRIPT_DIR}/dist"/. "$INSTALL_DIR/gui/dist/"
+cp -a "${PROJECT_ROOT}/dist"/. "$INSTALL_DIR/gui/dist/"
 
 # ─── Install CLI components ──────────────────────────────────────────────────
 mkdir -p "$INSTALL_DIR/cli/dist"
 mkdir -p "$INSTALL_DIR/cli/node_modules"
 
 # Copy all dist files (CLI needs the chunks and maps)
-cp -a "${SCRIPT_DIR}/dist"/. "$INSTALL_DIR/cli/dist/"
+cp -a "${PROJECT_ROOT}/dist"/. "$INSTALL_DIR/cli/dist/"
 
 # Copy package.json (needed for module resolution)
-cp "${SCRIPT_DIR}/package.json" "$INSTALL_DIR/cli/"
+cp "${PROJECT_ROOT}/package.json" "$INSTALL_DIR/cli/"
 
 # Copy node_modules (runtime dependencies only)
-if [[ -d "${SCRIPT_DIR}/node_modules" ]]; then
-  cp -a "${SCRIPT_DIR}/node_modules"/. "$INSTALL_DIR/cli/node_modules/"
+if [[ -d "${PROJECT_ROOT}/node_modules" ]]; then
+  cp -a "${PROJECT_ROOT}/node_modules"/. "$INSTALL_DIR/cli/node_modules/"
 fi
 
 # ─── Create wrapper scripts ──────────────────────────────────────────────────
@@ -101,12 +102,12 @@ ln -sf "$INSTALL_DIR/hb-scrub" "$BIN_LINK"
 ln -sf "$INSTALL_DIR/hb-scrub-gui" "$GUI_LINK"
 
 # ─── Install .desktop file ───────────────────────────────────────────────────
-cp "${SCRIPT_DIR}/hb-scrub.desktop" "$DESKTOP_FILE"
+cp "${PROJECT_ROOT}/packaging/linux/hb-scrub.desktop" "$DESKTOP_FILE"
 chmod 644 "$DESKTOP_FILE"
 
 # ─── Install icons ───────────────────────────────────────────────────────────
 for size in "${ICON_SIZES[@]}"; do
-  ICON_SRC="${SCRIPT_DIR}/electron/assets/icon_${size}x${size}.png"
+  ICON_SRC="${PROJECT_ROOT}/electron/assets/icon_${size}x${size}.png"
   ICON_DEST="/usr/share/icons/hicolor/${size}x${size}/apps"
   if [[ -f "$ICON_SRC" ]]; then
     mkdir -p "$ICON_DEST"
@@ -115,9 +116,9 @@ for size in "${ICON_SIZES[@]}"; do
 done
 
 # Also install the SVG icon if available
-if [[ -f "${SCRIPT_DIR}/electron/assets/icon.svg" ]]; then
+if [[ -f "${PROJECT_ROOT}/electron/assets/icon.svg" ]]; then
   mkdir -p /usr/share/icons/hicolor/scalable/apps
-  cp "${SCRIPT_DIR}/electron/assets/icon.svg" /usr/share/icons/hicolor/scalable/apps/hb-scrub.svg
+  cp "${PROJECT_ROOT}/electron/assets/icon.svg" /usr/share/icons/hicolor/scalable/apps/hb-scrub.svg
 fi
 
 # ─── Update icon cache and desktop database ──────────────────────────────────
@@ -142,5 +143,5 @@ echo "  Install dir:  ${INSTALL_DIR}"
 echo "  CLI binary:   ${BIN_LINK}"
 echo "  GUI binary:   ${GUI_LINK}"
 echo ""
-echo "  To uninstall: sudo ./uninstall.sh"
+echo "  To uninstall: sudo ./scripts/uninstall.sh"
 echo "════════════════════════════════════════════════════════════════"

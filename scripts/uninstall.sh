@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # HB Scrub – Uninstall Script
 # Removes HB Scrub from the system.
-# Run with:  sudo ./uninstall.sh
+# Run with:  sudo ./scripts/uninstall.sh
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
