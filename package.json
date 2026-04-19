@@ -47,6 +47,9 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "gui": "npm run build && node dist/hb-scrub.gui.js",
+    "desktop": "npm run tauri:dev",
+    "tauri:dev": "tauri dev --config src-tauri/tauri.conf.json",
+    "tauri:build": "tauri build --config src-tauri/tauri.conf.json",
     "electron": "npm run build && GTK_MODULES='' GTK2_RC_FILES='' electron electron/main.cjs",
     "electron:package": "npm run build && electron-packager . 'HB Scrub' --platform=linux --arch=arm64 --out=release --overwrite --asar --icon=electron/assets/icon_256x256.png",
     "electron:build": "npm run build && electron-builder --publish never",
@@ -92,6 +95,7 @@
   },
   "devDependencies": {
     "@electron/packager": "^19.1.0",
+    "@tauri-apps/cli": "^2.0.0",
     "@types/node": "^20.10.0",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",

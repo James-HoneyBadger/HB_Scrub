@@ -185,6 +185,20 @@ describe('GET /', () => {
     expect(html).toContain('id="btn-save-preset"');
     expect(html).toContain('id="btn-export-report"');
   });
+
+  it('HTML contains first-run onboarding and trust content', async () => {
+    const html = await fetch(`${baseUrl}/`).then((r) => r.text());
+    expect(html).toContain('id="onboarding-panel"');
+    expect(html).toContain('id="btn-dismiss-onboarding"');
+    expect(html).toContain('id="privacy-commitment"');
+  });
+
+  it('HTML contains recent activity surfaces', async () => {
+    const html = await fetch(`${baseUrl}/`).then((r) => r.text());
+    expect(html).toContain('id="recent-files"');
+    expect(html).toContain('id="recent-folders"');
+    expect(html).toContain('id="status-banner"');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

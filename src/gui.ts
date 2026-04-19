@@ -1,7 +1,7 @@
 /**
  * HB_Scrub GUI — standalone local web application
  * Run with: node dist/hb-scrub.gui.js
- * Then open http://localhost:3777 in your browser.
+ * Then open the printed localhost URL in your browser.
  */
 
 import * as http from 'node:http';
@@ -13,7 +13,7 @@ import {
   getSupportedFormats,
 } from './index.js';
 
-const PORT = 3777;
+const PORT = Number(process.env['HB_SCRUB_PORT'] || 3777);
 
 // ─── HTML UI ─────────────────────────────────────────────────────────────────
 
@@ -342,6 +342,33 @@ const HTML = `<!DOCTYPE html>
       font-size: 0.78rem;
     }
     .history-item span, .history-item small, .history-empty { color: var(--muted); }
+    .status-banner {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      border-left: 4px solid var(--blue);
+      background: linear-gradient(135deg, rgba(122,184,255,0.08), rgba(77,211,157,0.06));
+    }
+    .status-banner strong { display: block; font-size: 0.95rem; }
+    .status-banner span { color: var(--muted); font-size: 0.82rem; }
+    .status-banner.success { border-left-color: var(--green); }
+    .status-banner.error { border-left-color: var(--red); }
+    .status-banner.processing { border-left-color: var(--yellow); }
+    .inline-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .onboarding-note {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface2);
+      padding: 10px 12px;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .link-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .link-list a { color: var(--blue); text-decoration: none; }
+    .link-list a:hover { text-decoration: underline; }
+    .recent-stack { display: flex; flex-direction: column; gap: 10px; }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -450,6 +477,34 @@ const HTML = `<!DOCTYPE html>
         <div id="formats-list" style="display:flex;flex-wrap:wrap;gap:5px;"></div>
       </div>
 
+      <div class="panel" id="privacy-commitment">
+        <div class="panel-title">Trust & privacy</div>
+        <div class="subtle-copy">Every cleanup run stays on this machine. No uploads, no cloud relay, no account required.</div>
+        <div class="onboarding-note">Need disclosure or review help? Security reporting and community expectations are linked below.</div>
+        <div class="link-list">
+          <a href="https://github.com/James-HoneyBadger/HB_Scrub/security" target="_blank" rel="noreferrer">View the security policy</a>
+          <a href="https://github.com/James-HoneyBadger/HB_Scrub/blob/main/CODE_OF_CONDUCT.md" target="_blank" rel="noreferrer">View the code of conduct</a>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Recent activity</div>
+        <div class="recent-stack">
+          <div>
+            <div class="subtle-copy" style="margin-bottom:6px;">Recent files</div>
+            <ul class="history-list" id="recent-files">
+              <li class="history-empty">No recent files yet.</li>
+            </ul>
+          </div>
+          <div>
+            <div class="subtle-copy" style="margin-bottom:6px;">Recent folders</div>
+            <ul class="history-list" id="recent-folders">
+              <li class="history-empty">No recent folders yet.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
       <div class="panel" id="session-history">
         <div class="panel-title">Recent sessions</div>
         <ul class="history-list" id="history-list">
@@ -459,6 +514,18 @@ const HTML = `<!DOCTYPE html>
     </aside>
 
     <main class="workspace">
+      <section class="panel" id="onboarding-panel">
+        <div class="panel-title">First-run guide</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <strong>Start with the privacy preset, drop files, then export a report if you need an audit trail.</strong>
+          <div class="subtle-copy">This workspace keeps processing local, remembers your preferred settings, and now highlights recent activity so repeat jobs are faster.</div>
+          <div class="inline-actions">
+            <button class="btn btn-primary" id="btn-onboarding-start">Use privacy defaults</button>
+            <button class="btn btn-ghost" id="btn-dismiss-onboarding">Dismiss</button>
+          </div>
+        </div>
+      </section>
+
       <section class="panel hero">
         <div class="hero-copy">
           <div class="eyebrow">Private metadata cleanup</div>
@@ -472,6 +539,13 @@ const HTML = `<!DOCTYPE html>
           <div class="hero-chip"><strong>Safer defaults</strong> Privacy-first presets are built in.</div>
         </div>
       </section>
+
+      <div class="panel status-banner" id="status-banner">
+        <div>
+          <strong>Ready for a private cleanup session.</strong>
+          <span>All processing stays local on this machine.</span>
+        </div>
+      </div>
 
       <section class="stats-grid" id="stats-grid">
         <div class="stat-card"><div class="stat-label">Files in session</div><div class="stat-value" id="stat-total">0</div></div>
@@ -580,6 +654,12 @@ const HTML = `<!DOCTYPE html>
     const filterStatus      = $('filter-status');
     const sortFiles         = $('sort-files');
     const historyList       = $('history-list');
+    const recentFilesList   = $('recent-files');
+    const recentFoldersList = $('recent-folders');
+    const statusBanner      = $('status-banner');
+    const onboardingPanel   = $('onboarding-panel');
+    const btnDismissOnboarding = $('btn-dismiss-onboarding');
+    const btnOnboardingStart   = $('btn-onboarding-start');
     const statTotal         = $('stat-total');
     const statCleaned       = $('stat-cleaned');
     const statPending       = $('stat-pending');
@@ -595,6 +675,9 @@ const HTML = `<!DOCTYPE html>
     const RC_KEY = 'hbscrub-options';
     const HISTORY_KEY = 'hbscrub-history';
     const PRESET_KEY = 'hbscrub-custom-presets';
+    const RECENT_FILES_KEY = 'hbscrub-recent-files';
+    const RECENT_FOLDERS_KEY = 'hbscrub-recent-folders';
+    const ONBOARDING_KEY = 'hbscrub-onboarding-dismissed';
 
     // ── Profile definitions ───────────────────────────────────────────────
     const PROFILES = {
@@ -721,6 +804,102 @@ const HTML = `<!DOCTYPE html>
       showToast('Preset saved: ' + name, 'success');
     });
 
+    function setBanner(kind, title, detail) {
+      statusBanner.className = 'panel status-banner ' + (kind || '');
+      statusBanner.innerHTML = '<div><strong>' + title + '</strong><span>' + detail + '</span></div>';
+    }
+
+    function showNativeNotification(title, body) {
+      if (!('Notification' in window)) return;
+      const spawn = () => {
+        try { new Notification(title, { body }); } catch { /* ignore */ }
+      };
+      if (Notification.permission === 'granted') {
+        spawn();
+      } else if (Notification.permission === 'default') {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') spawn();
+        }).catch(() => {});
+      }
+    }
+
+    function readStoredList(key) {
+      try {
+        return JSON.parse(localStorage.getItem(key) || '[]');
+      } catch {
+        return [];
+      }
+    }
+
+    function renderRecentList(target, items, emptyLabel) {
+      if (!items.length) {
+        target.innerHTML = '<li class="history-empty">' + emptyLabel + '</li>';
+        return;
+      }
+      target.innerHTML = items.map(item => '<li class="history-item"><strong>' + item.label + '</strong><small>' + new Date(item.at).toLocaleString() + '</small></li>').join('');
+    }
+
+    function renderRecentActivity() {
+      renderRecentList(recentFilesList, readStoredList(RECENT_FILES_KEY), 'No recent files yet.');
+      renderRecentList(recentFoldersList, readStoredList(RECENT_FOLDERS_KEY), 'No recent folders yet.');
+    }
+
+    function recordRecent(key, labels) {
+      if (!labels || !labels.length) return;
+      try {
+        const current = readStoredList(key);
+        const next = labels.map(label => ({ label, at: new Date().toISOString() })).concat(current);
+        const deduped = [];
+        const seen = new Set();
+        for (const item of next) {
+          const norm = item.label.toLowerCase();
+          if (seen.has(norm)) continue;
+          seen.add(norm);
+          deduped.push(item);
+          if (deduped.length >= 6) break;
+        }
+        localStorage.setItem(key, JSON.stringify(deduped));
+      } catch {
+        /* ignore storage errors */
+      }
+      renderRecentActivity();
+    }
+
+    function createEntry(file) {
+      return {
+        file,
+        status: 'pending',
+        result: null,
+        format: '…',
+        metadataTypes: [],
+        removedTypes: [],
+        warnings: [],
+        resultName: '',
+        savedBytes: 0,
+        createdAt: Date.now() + nextId,
+      };
+    }
+
+    function updateOnboardingVisibility(forceHide = false) {
+      const dismissed = forceHide || localStorage.getItem(ONBOARDING_KEY) === '1';
+      onboardingPanel.style.display = dismissed ? 'none' : '';
+    }
+
+    btnDismissOnboarding.addEventListener('click', () => {
+      localStorage.setItem(ONBOARDING_KEY, '1');
+      updateOnboardingVisibility(true);
+      setBanner('', 'Onboarding hidden.', 'You can still use presets, reports, and local history at any time.');
+    });
+
+    btnOnboardingStart.addEventListener('click', () => {
+      $('opt-profile').value = 'privacy';
+      applyProfile('privacy');
+      localStorage.setItem(ONBOARDING_KEY, '1');
+      updateOnboardingVisibility(true);
+      showToast('Privacy defaults applied', 'success');
+      setBanner('success', 'Privacy defaults applied.', 'Drop files or browse to begin a local cleanup run.');
+    });
+
     // Attach change listeners to persist on every change
     OPT_IDS.forEach(id => $(id).addEventListener('change', onManualOptionChange));
     $('opt-gps').addEventListener('change', onManualOptionChange);
@@ -730,6 +909,8 @@ const HTML = `<!DOCTYPE html>
     loadOptions();
     renderHistory();
     renderSavedPresets();
+    renderRecentActivity();
+    updateOnboardingVisibility();
 
     // ── Electron integration (#14 + #15) ─────────────────────────────────
     if (window.electronAPI) {
@@ -747,7 +928,7 @@ const HTML = `<!DOCTYPE html>
       // Listen for files pushed by the watch-folder feature
       window.electronAPI.onWatchFile(f => {
         const bytes = Uint8Array.from(atob(f.data), c => c.charCodeAt(0));
-        addFiles([new File([bytes], f.name)]);
+        addFiles([new File([bytes], f.name)], 'watch');
         showToast('Watch: ' + f.name + ' added', '');
       });
 
@@ -814,7 +995,7 @@ const HTML = `<!DOCTYPE html>
         }
         if (entries.some(e => e.isDirectory)) {
           await collectFilesFromEntries(entries, allFiles);
-          addFiles(allFiles);
+          addFiles(allFiles, 'folder');
           return;
         }
       }
@@ -833,24 +1014,21 @@ const HTML = `<!DOCTYPE html>
     });
 
     // ── Add files ─────────────────────────────────────────────────────────
-    function addFiles(fileList) {
+    function addFiles(fileList, source = 'files') {
+      if (!fileList || !fileList.length) return;
       fileList.forEach(f => {
         const id = nextId++;
-        files.set(id, {
-          file: f,
-          status: 'pending',
-          result: null,
-          format: '…',
-          metadataTypes: [],
-          removedTypes: [],
-          warnings: [],
-          resultName: '',
-          savedBytes: 0,
-          createdAt: Date.now() + id,
-        });
+        files.set(id, createEntry(f));
         appendRow(id);
         readMeta(id);
       });
+      recordRecent(RECENT_FILES_KEY, fileList.map(f => f.name));
+      if (source === 'folder') {
+        recordRecent(RECENT_FOLDERS_KEY, ['Dropped folder batch • ' + fileList.length + ' files']);
+      } else if (source === 'watch') {
+        recordRecent(RECENT_FOLDERS_KEY, ['Watch folder intake']);
+      }
+      setBanner('', fileList.length + ' file(s) added.', 'Review the queue, then run a local cleanup pass when ready.');
       refreshUI();
     }
 
@@ -961,6 +1139,7 @@ const HTML = `<!DOCTYPE html>
       let successCount = 0;
       let errorCount = 0;
       let savedThisRun = 0;
+      setBanner('processing', 'Cleanup in progress…', 'Processing ' + pending.length + ' queued file(s) locally.');
 
       for (const [id, entry] of pending) {
         entry.status = 'reading';
@@ -1025,10 +1204,10 @@ const HTML = `<!DOCTYPE html>
       if (successCount > 0) {
         recordSessionHistory({ files: pending.length, cleaned: successCount, errors: errorCount, savedBytes: savedThisRun });
       }
-      showToast(
-        successCount + ' file(s) cleaned' + (errorCount ? ' • ' + errorCount + ' need attention' : ''),
-        errorCount ? 'error' : 'success'
-      );
+      const runMessage = successCount + ' file(s) cleaned' + (errorCount ? ' • ' + errorCount + ' need attention' : '');
+      showToast(runMessage, errorCount ? 'error' : 'success');
+      showNativeNotification('HB Scrub run finished', runMessage);
+      setBanner(errorCount ? 'error' : 'success', errorCount ? 'Run finished with attention needed.' : 'Cleanup complete.', successCount + ' cleaned • ' + fmtSize(savedThisRun) + ' saved' + (errorCount ? ' • ' + errorCount + ' issue(s)' : ''));
       setTimeout(() => { progBar.style.width = '0%'; }, 1800);
       refreshUI();
     });
@@ -1221,6 +1400,7 @@ const HTML = `<!DOCTYPE html>
       a.click();
       URL.revokeObjectURL(a.href);
       showToast('Session report exported', 'success');
+      showNativeNotification('HB Scrub report exported', 'The local audit report is ready to review.');
     });
 
     // ── Options ───────────────────────────────────────────────────────────
@@ -1380,6 +1560,13 @@ const HTML = `<!DOCTYPE html>
       table.style.display = count && visible ? '' : 'none';
       emptyState.style.display = visible ? 'none' : '';
       emptyState.textContent = count ? 'No files match the current view.' : 'Drop files above to begin a private cleanup session.';
+      if (!count) {
+        setBanner('', 'Ready for a private cleanup session.', 'All processing stays local on this machine.');
+      } else if ([...files.values()].some(e => e.status === 'error')) {
+        setBanner('error', 'Some files need review.', 'Retry failed items or export the report for follow-up.');
+      } else if ([...files.values()].some(e => e.status === 'reading')) {
+        setBanner('processing', 'Cleanup in progress…', 'The queue is being processed locally.');
+      }
       btnScrub.disabled = count === 0;
       btnDlAll.disabled = ![...files.values()].some(e => e.status === 'done');
       fileCount.textContent = count ? count + ' file' + (count !== 1 ? 's' : '') + ' in this session' : '';
@@ -1531,6 +1718,15 @@ export function buildOutputName(original: string): string {
 // Only auto-start the server when executed directly (not imported by tests)
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const server = http.createServer(handleRequest);
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n  HB Scrub could not start because port ${PORT} is already in use.\n`);
+      console.error('  Close the existing instance or set HB_SCRUB_PORT to another local port.\n');
+      process.exit(1);
+      return;
+    }
+    throw err;
+  });
   server.listen(PORT, '127.0.0.1', () => {
     const addr = `http://localhost:${PORT}`;
     console.log(`\n  🛡  HB Scrub GUI is running at ${addr}\n`);

@@ -8,58 +8,43 @@ process.env.GTK2_RC_FILES = '';
 const { app, BrowserWindow, shell, Menu, ipcMain, dialog, Tray, nativeImage } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
-const http = require('http');
 const fs = require('fs');
+const {
+  DEFAULT_PORT,
+  isHbScrubServer,
+  pickServerPort,
+  waitForServer,
+} = require('./server-utils.cjs');
 
 // Suppress Chromium GPU/VSync and DBus noise on Linux
 app.commandLine.appendSwitch('disable-gpu-vsync');
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 app.commandLine.appendSwitch('log-level', '3'); // only fatal errors
 
-const PORT = 3777;
+let serverPort = DEFAULT_PORT;
 let mainWindow = null;
 let guiServer = null;
 let tray = null;
 let watchHandle = null;
+let ownsGuiServer = false;
+let isQuitting = false;
 
 // ─── Start the GUI HTTP server as a child process ────────────────────────────
 
-function startServer() {
+function startServer(port) {
   const serverScript = path.join(__dirname, '..', 'dist', 'hb-scrub.gui.js');
   guiServer = spawn(process.execPath, [serverScript], {
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env },
+    env: { ...process.env, HB_SCRUB_PORT: String(port) },
   });
 
   guiServer.stdout.on('data', (d) => process.stdout.write(d));
   guiServer.stderr.on('data', (d) => process.stderr.write(d));
 
   guiServer.on('exit', (code) => {
-    if (code !== 0 && code !== null) {
+    if (ownsGuiServer && code !== 0 && code !== null) {
       console.error(`GUI server exited with code ${code}`);
     }
-  });
-}
-
-// ─── Wait for the server to be ready ────────────────────────────────────────
-
-function waitForServer(retries = 30, delay = 200) {
-  return new Promise((resolve, reject) => {
-    const attempt = () => {
-      const req = http.get(`http://127.0.0.1:${PORT}/`, (res) => {
-        res.resume();
-        resolve();
-      });
-      req.on('error', () => {
-        if (retries-- > 0) {
-          setTimeout(attempt, delay);
-        } else {
-          reject(new Error('GUI server did not start in time'));
-        }
-      });
-      req.setTimeout(500, () => req.destroy());
-    };
-    attempt();
   });
 }
 
@@ -81,10 +66,17 @@ function createWindow() {
     show: false,
   });
 
-  mainWindow.loadURL(`http://127.0.0.1:${PORT}/`);
+  mainWindow.loadURL(`http://127.0.0.1:${serverPort}/`);
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+  });
+
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
   });
 
   // Open external links in the default browser, not Electron
@@ -281,32 +273,54 @@ function createTray() {
 // ─── App lifecycle ───────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
-  startServer();
+  serverPort = await pickServerPort(DEFAULT_PORT);
+  ownsGuiServer = !(await isHbScrubServer(serverPort));
+
+  if (ownsGuiServer) {
+    startServer(serverPort);
+  } else {
+    console.log(`Reusing an existing HB Scrub service on http://127.0.0.1:${serverPort}/`);
+  }
+
   try {
-    await waitForServer();
+    await waitForServer(serverPort);
   } catch (err) {
     console.error(err);
+    dialog.showErrorBox(
+      'HB Scrub startup failed',
+      `The desktop app could not reach its local service on port ${serverPort}.`
+    );
     app.quit();
     return;
   }
+
   createWindow();
   createTray();
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform === 'darwin') {
+    return;
+  }
 });
 
 app.on('activate', async () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    await waitForServer();
+    await waitForServer(serverPort).catch(() => undefined);
     createWindow();
+  } else if (mainWindow) {
+    mainWindow.show();
+    mainWindow.focus();
   }
+});
+
+app.on('before-quit', () => {
+  isQuitting = true;
 });
 
 app.on('will-quit', () => {
   stopWatch();
-  if (guiServer) {
+  if (ownsGuiServer && guiServer) {
     guiServer.kill();
     guiServer = null;
   }

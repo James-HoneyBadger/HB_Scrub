@@ -92,27 +92,17 @@ HB Scrub can be installed as a fully standalone system application — a CLI acc
 git clone https://github.com/James-HoneyBadger/HB_Scrub.git
 cd HB_Scrub
 npm install
-npm run build
+npm run tauri:build
 ```
 
-### Step 2: Package the Electron app
-
-```bash
-# Detect architecture automatically
-ARCH=$(uname -m | sed 's/aarch64/arm64/;s/x86_64/x64/')
-npx @electron/packager . "HB Scrub" --platform=linux --arch=$ARCH --out=release --overwrite --asar
-```
-
-This creates a self-contained Electron application in `release/HB Scrub-linux-$ARCH/`.
-
-### Step 3: Install
+### Step 2: Install
 
 ```bash
 sudo ./install.sh
 ```
 
 The install script:
-- Installs the GUI app to `/opt/hb-scrub/gui/`
+- Installs the Tauri GUI app to `/opt/hb-scrub/gui/`
 - Installs the CLI and dependencies to `/opt/hb-scrub/cli/`
 - Creates `/usr/local/bin/hb-scrub` (CLI) and `/usr/local/bin/hb-scrub-gui` (GUI)
 - Installs [hb-scrub.desktop](../hb-scrub.desktop) to `/usr/share/applications/`
@@ -149,15 +139,15 @@ This removes all installed files, symlinks, icons, and the desktop entry.
 | CLI wrapper script | `/usr/local/bin/hb-scrub` |
 | GUI launcher script | `/usr/local/bin/hb-scrub-gui` |
 | CLI runtime (dist + node_modules) | `/opt/hb-scrub/cli/` |
-| Electron GUI app | `/opt/hb-scrub/gui/` |
+| Tauri GUI app | `/opt/hb-scrub/gui/` |
 | Desktop entry | `/usr/share/applications/hb-scrub.desktop` |
 | Icons (PNG 16–512 + SVG) | `/usr/share/icons/hicolor/*/apps/hb-scrub.*` |
 
 ---
 
-## 4. Desktop App (Electron) — Run from Source
+## 4. Desktop App (Tauri) — Run from Source
 
-HB_Scrub includes a standalone Electron desktop application — a full GUI with drag-and-drop, no browser or terminal required.
+HB_Scrub includes a standalone Tauri desktop application — a full GUI with drag-and-drop, local-only processing, and a lighter desktop shell.
 
 ### Run from source (development)
 
@@ -170,8 +160,25 @@ cd HB_Scrub
 npm install
 
 # Build and launch the desktop app
-npm run electron
+npm run desktop
 ```
+
+### Linux build prerequisites
+
+On Debian or Ubuntu, install the native packages once before building the Tauri shell:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+```
+
+### Troubleshooting
+
+If the desktop window does not appear:
+
+- confirm the local service is not blocked by another process using the same localhost port
+- ensure `node`, `cargo`, and `pkg-config` are available in your shell
+- re-run the desktop shell with `npm run desktop` after installing the Linux packages above
 
 ---
 
