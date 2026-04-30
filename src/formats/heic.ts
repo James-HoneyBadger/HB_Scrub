@@ -42,9 +42,12 @@ function parseBoxHeader(
     if (offset + 16 > data.length) {
       return null;
     }
-    // Read 64-bit size (safe up to 2^53)
     const highBits = dataview.readUint32BE(data, offset + 8);
     const lowBits = dataview.readUint32BE(data, offset + 12);
+    // Guard against values exceeding Number.MAX_SAFE_INTEGER (hi >= 2^21 overflows)
+    if (highBits >= 0x200000) {
+      return null; // Reject pathologically large box sizes
+    }
     size = highBits * 0x100000000 + lowBits;
     headerSize = 16;
   } else if (size === 0) {
@@ -124,8 +127,11 @@ function readSizedValue(data: Uint8Array, offset: number, size: number): number 
   if (size === 4) {
     return dataview.readUint32BE(data, offset);
   } else if (size === 8) {
+    if (offset + 8 > data.length) return 0;
     const hi = dataview.readUint32BE(data, offset);
     const lo = dataview.readUint32BE(data, offset + 4);
+    // Guard against values exceeding Number.MAX_SAFE_INTEGER
+    if (hi >= 0x200000) return Number.MAX_SAFE_INTEGER;
     return hi * 0x100000000 + lo;
   }
   return 0;
@@ -133,24 +139,25 @@ function readSizedValue(data: Uint8Array, offset: number, size: number): number 
 
 /**
  * Find metadata item IDs by parsing the iinf (item information) box.
- * Returns separate sets for EXIF and XMP items.
+ * Returns separate sets for EXIF, XMP, and thumbnail items.
  */
 function findMetadataItemIds(
   data: Uint8Array,
   metaChildren: HeicBox[]
-): { exifIds: Set<number>; xmpIds: Set<number> } {
+): { exifIds: Set<number>; xmpIds: Set<number>; thumbIds: Set<number> } {
   const exifIds = new Set<number>();
   const xmpIds = new Set<number>();
+  const thumbIds = new Set<number>();
 
   const iinfBox = metaChildren.find(b => b.type === 'iinf');
   if (!iinfBox) {
-    return { exifIds, xmpIds };
+    return { exifIds, xmpIds, thumbIds };
   }
 
   let offset = iinfBox.dataOffset;
   const end = iinfBox.offset + iinfBox.size;
   if (offset + 4 > data.length) {
-    return { exifIds, xmpIds };
+    return { exifIds, xmpIds, thumbIds };
   }
 
   const version = data[offset]!;
@@ -159,12 +166,12 @@ function findMetadataItemIds(
   // entry count
   if (version === 0) {
     if (offset + 2 > data.length) {
-      return { exifIds, xmpIds };
+      return { exifIds, xmpIds, thumbIds };
     }
     offset += 2; // uint16 count
   } else {
     if (offset + 4 > data.length) {
-      return { exifIds, xmpIds };
+      return { exifIds, xmpIds, thumbIds };
     }
     offset += 4; // uint32 count
   }
@@ -196,6 +203,8 @@ function findMetadataItemIds(
         const itemType = buffer.toAscii(data, base + 4, 4);
         if (itemType === 'Exif') {
           exifIds.add(itemId);
+        } else if (itemType === 'thmb') {
+          thumbIds.add(itemId);
         } else if (itemType === 'mime') {
           // Check if this is an XMP item by looking for "application/rdf+xml" after the item_type
           const afterType = base + 8;
@@ -210,7 +219,7 @@ function findMetadataItemIds(
     offset += header.size;
   }
 
-  return { exifIds, xmpIds };
+  return { exifIds, xmpIds, thumbIds };
 }
 
 /**
@@ -337,15 +346,17 @@ function findItemLocations(
 function findMetadataLocations(data: Uint8Array): {
   exif: Array<{ offset: number; length: number }>;
   xmp: Array<{ offset: number; length: number }>;
+  thumbnails: Array<{ offset: number; length: number }>;
 } {
   const exif: Array<{ offset: number; length: number }> = [];
   const xmp: Array<{ offset: number; length: number }> = [];
+  const thumbnails: Array<{ offset: number; length: number }> = [];
   const boxes = parseBoxes(data);
 
   // Find meta box
   const metaBox = boxes.find(b => b.type === 'meta');
   if (!metaBox) {
-    return { exif, xmp };
+    return { exif, xmp, thumbnails };
   }
 
   // Parse meta container
@@ -369,8 +380,8 @@ function findMetadataLocations(data: Uint8Array): {
     }
   }
 
-  // Method 2: Find Exif and XMP items via iinf/iloc
-  const { exifIds, xmpIds } = findMetadataItemIds(data, metaChildren);
+  // Method 2: Find Exif, XMP, and thumbnail items via iinf/iloc
+  const { exifIds, xmpIds, thumbIds } = findMetadataItemIds(data, metaChildren);
 
   const exifItemLocations = findItemLocations(data, metaChildren, exifIds);
   for (const loc of exifItemLocations) {
@@ -385,6 +396,11 @@ function findMetadataLocations(data: Uint8Array): {
   const xmpItemLocations = findItemLocations(data, metaChildren, xmpIds);
   for (const loc of xmpItemLocations) {
     xmp.push(loc);
+  }
+
+  const thumbItemLocations = findItemLocations(data, metaChildren, thumbIds);
+  for (const loc of thumbItemLocations) {
+    thumbnails.push(loc);
   }
 
   // Also check for Exif boxes directly in meta children
@@ -402,7 +418,43 @@ function findMetadataLocations(data: Uint8Array): {
     }
   }
 
-  return { exif, xmp };
+  return { exif, xmp, thumbnails };
+}
+
+/**
+ * Find HDR metadata (clli, mdcv) and auxiliary property (auxC) box locations
+ * in the ipco (item property container). These boxes reveal capture conditions
+ * and sensor characteristics that can be privacy-sensitive.
+ */
+function findHdrMetadataLocations(data: Uint8Array): Array<{ offset: number; length: number }> {
+  const locations: Array<{ offset: number; length: number }> = [];
+  const boxes = parseBoxes(data);
+
+  const metaBox = boxes.find(b => b.type === 'meta');
+  if (!metaBox) {
+    return locations;
+  }
+
+  const metaChildren = parseContainerBox(data, metaBox);
+  const iprpBox = metaChildren.find(b => b.type === 'iprp');
+  if (!iprpBox) {
+    return locations;
+  }
+
+  const iprpChildren = parseContainerBox(data, iprpBox);
+  const ipcoBox = iprpChildren.find(b => b.type === 'ipco');
+  if (!ipcoBox) {
+    return locations;
+  }
+
+  const HDR_TYPES = new Set(['clli', 'mdcv', 'auxC']);
+  for (const box of parseContainerBox(data, ipcoBox)) {
+    if (HDR_TYPES.has(box.type)) {
+      locations.push({ offset: box.dataOffset, length: box.dataSize });
+    }
+  }
+
+  return locations;
 }
 
 /**
@@ -525,12 +577,16 @@ export function remove(data: Uint8Array, options: RemoveOptions = {}): Uint8Arra
   const result = new Uint8Array(data);
 
   // Find and anonymize EXIF and XMP data (only within known structures)
-  const { exif: exifLocations, xmp: xmpLocations } = findMetadataLocations(data);
+  const { exif: exifLocations, xmp: xmpLocations, thumbnails: thumbLocations } = findMetadataLocations(data);
   if (exifLocations.length > 0) {
     overwriteWithZeros(result, exifLocations);
   }
   if (xmpLocations.length > 0) {
     overwriteWithZeros(result, xmpLocations);
+  }
+  // Zero embedded thumbnail images
+  if (thumbLocations.length > 0) {
+    overwriteWithZeros(result, thumbLocations);
   }
 
   // Anonymize color profiles unless preserveColorProfile is set
@@ -539,6 +595,12 @@ export function remove(data: Uint8Array, options: RemoveOptions = {}): Uint8Arra
     if (colorProfileLocations.length > 0) {
       overwriteWithZeros(result, colorProfileLocations);
     }
+  }
+
+  // Zero HDR capture metadata (clli, mdcv) and auxiliary properties (auxC)
+  const hdrLocations = findHdrMetadataLocations(data);
+  if (hdrLocations.length > 0) {
+    overwriteWithZeros(result, hdrLocations);
   }
 
   // Convert zeroed metadata box data into proper 'free' boxes so ISOBMFF-aware
@@ -558,7 +620,7 @@ export function remove(data: Uint8Array, options: RemoveOptions = {}): Uint8Arra
 export function getMetadataTypes(data: Uint8Array): string[] {
   const types: string[] = [];
 
-  const { exif: exifLocations, xmp: xmpLocations } = findMetadataLocations(data);
+  const { exif: exifLocations, xmp: xmpLocations, thumbnails: thumbLocations } = findMetadataLocations(data);
 
   if (exifLocations.length > 0) {
     types.push('EXIF');
@@ -582,9 +644,18 @@ export function getMetadataTypes(data: Uint8Array): string[] {
     types.push('XMP');
   }
 
+  if (thumbLocations.length > 0) {
+    types.push('Thumbnail');
+  }
+
   const colorProfileLocations = findColorProfileLocations(data);
   if (colorProfileLocations.length > 0) {
     types.push('ICC Profile');
+  }
+
+  const hdrLocations = findHdrMetadataLocations(data);
+  if (hdrLocations.length > 0) {
+    types.push('HDR Metadata');
   }
 
   return [...new Set(types)];

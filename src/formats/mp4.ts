@@ -48,6 +48,11 @@ const ZERO_ATOM_TYPES = new Set([
   '©edl', // Writer / edit list info
   'XMP_',
   'uuid', // XMP
+  'elst', // Edit list — reveals editing timeline
+  'covr', // Cover art / thumbnail
+  'chap', // Chapter references
+  'tmpo', // Tempo
+  'cprt', // Additional copyright atom
 ]);
 
 /** Container atoms whose children should be recursed into. */
@@ -61,6 +66,8 @@ const CONTAINER_ATOM_TYPES = new Set([
   'udta',
   'meta',
   'ilst',
+  'edts', // Edit box — contains elst
+  'tref', // Track reference — contains chap
 ]);
 
 // ─── Atom parser ─────────────────────────────────────────────────────────────
@@ -93,6 +100,10 @@ function parseAtomHeader(
     }
     const hi = dataview.readUint32BE(data, offset + 8);
     const lo = dataview.readUint32BE(data, offset + 12);
+    // Guard against values exceeding Number.MAX_SAFE_INTEGER
+    if (hi >= 0x200000) {
+      return null; // Reject pathologically large atom sizes
+    }
     size = hi * 0x100000000 + lo;
     headerSize = 16;
   } else if (size === 0) {
@@ -144,7 +155,7 @@ function walkAtoms(
   visitor: (atom: Atom, data: Uint8Array) => void,
   depth = 0
 ): void {
-  if (depth > 10) {
+  if (depth > 64) {
     return;
   } // safeguard
 

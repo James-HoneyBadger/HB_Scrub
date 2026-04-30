@@ -19,7 +19,7 @@
  * ```
  */
 
-import { readFile, writeFile, copyFile, mkdir, readdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, copyFile, mkdir, readdir, stat, rename, unlink } from 'node:fs/promises';
 import { resolve, dirname, basename, extname, join } from 'node:path';
 import { removeMetadataSync } from './remove.js';
 import type {
@@ -187,7 +187,17 @@ async function processSingleFile(inputPath: string, options: BatchOptions): Prom
     }
 
     await mkdir(dirname(outputPath), { recursive: true });
-    await writeFile(outputPath, result.data);
+    // Atomic write: write to a temp file then rename to avoid partial output on crash.
+    const tmpPath = `${outputPath}.hbtmp.${Math.random().toString(36).slice(2)}`;
+    try {
+      await writeFile(tmpPath, result.data);
+      await rename(tmpPath, outputPath);
+    } catch (writeErr) {
+      await unlink(tmpPath).catch(() => {
+        /* ignore cleanup errors */
+      });
+      throw writeErr;
+    }
 
     entry.success = true;
   } catch (err) {

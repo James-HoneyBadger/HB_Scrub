@@ -22,6 +22,12 @@ const TAGS_TO_REMOVE: Set<number> = new Set([
   34853, // GPSInfoIFDPointer - Remove entire GPS IFD
   34675, // ICCProfile — removed by default; preserved if preserveColorProfile is set
   700, // XMP
+  // GeoTIFF tags — reveal precise geographic location of survey/satellite imagery
+  33550, // ModelPixelScaleTag
+  33922, // ModelTiepointTag
+  34735, // GeoKeyDirectoryTag
+  34736, // GeoDoubleParamsTag
+  34737, // GeoAsciiParamsTag
 ]);
 
 /**
@@ -299,8 +305,13 @@ function getTagName(tag: number): string {
     315: 'Artist',
     700: 'XMP',
     33432: 'Copyright',
+    33550: 'GeoTIFF ModelPixelScale',
+    33922: 'GeoTIFF ModelTiepoint',
     34665: 'EXIF',
     34675: 'ICC Profile',
+    34735: 'GeoTIFF GeoKeyDirectory',
+    34736: 'GeoTIFF GeoDoubleParams',
+    34737: 'GeoTIFF GeoAsciiParams',
     34853: 'GPS',
   };
   return names[tag] ?? `Tag ${tag}`;

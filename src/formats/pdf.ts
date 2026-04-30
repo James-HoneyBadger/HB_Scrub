@@ -256,19 +256,11 @@ function findXmpStreamRanges(data: Uint8Array): StreamRange[] {
 export function remove(data: Uint8Array, _options: RemoveOptions = {}): Uint8Array {
   const result = new Uint8Array(data); // mutable copy
 
-  // Bail on encrypted PDFs
-  const header = slice(data, 0, Math.min(data.length, 8192));
-  if (isEncrypted(header)) {
-    if (_options.pdfPassword) {
-      // TODO: full PDF decryption is beyond the scope of this zero-dependency
-      // library.  When a password is supplied we still cannot strip metadata
-      // without first decrypting each object.  Throw a descriptive error so
-      // callers know the file was not silently skipped.
-      throw new Error(
-        'Encrypted PDF detected — metadata removal requires prior decryption. ' +
-        'Use an external tool (e.g. qpdf --decrypt) to remove encryption first, then re-run.',
-      );
-    }
+  // Bail on encrypted PDFs — the /Encrypt reference lives in the trailer
+  // dictionary near the END of the file, so check the last 8 KiB.
+  const tailStart = Math.max(0, data.length - 8192);
+  const pdfTail = slice(data, tailStart, data.length);
+  if (isEncrypted(pdfTail)) {
     return result;
   }
 
@@ -295,8 +287,9 @@ export function remove(data: Uint8Array, _options: RemoveOptions = {}): Uint8Arr
 export function getMetadataTypes(data: Uint8Array): string[] {
   const types: string[] = [];
 
-  const header = slice(data, 0, Math.min(data.length, 8192));
-  if (isEncrypted(header)) {
+  const tailStart = Math.max(0, data.length - 8192);
+  const pdfTail = slice(data, tailStart, data.length);
+  if (isEncrypted(pdfTail)) {
     return ['Encrypted'];
   }
 

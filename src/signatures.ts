@@ -17,6 +17,12 @@ export const FILE_SIGNATURES = {
   TIFF_LE: new Uint8Array([0x49, 0x49, 0x2a, 0x00]), // II*\0 (little-endian)
   TIFF_BE: new Uint8Array([0x4d, 0x4d, 0x00, 0x2a]), // MM\0* (big-endian)
 
+  // Fujifilm RAF: starts with "FUJIFILMCCD-RAW " (16 bytes)
+  RAF: new Uint8Array([0x46, 0x55, 0x4a, 0x49, 0x46, 0x49, 0x4c, 0x4d]),
+
+  // Panasonic RW2 / Leica RWL: TIFF-LE variant with 0x55 instead of 0x2a at offset 2
+  RW2: new Uint8Array([0x49, 0x49, 0x55, 0x00]),
+
   // HEIC/HEIF/AVIF (ISOBMFF container)
   FTYP: new Uint8Array([0x66, 0x74, 0x79, 0x70]), // ftyp (at offset 4)
 

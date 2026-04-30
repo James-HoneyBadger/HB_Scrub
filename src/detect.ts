@@ -162,6 +162,16 @@ export function detectFormat(data: Uint8Array): SupportedFormat {
     return 'tiff';
   }
 
+  // Fujifilm RAF: starts with "FUJIFILM" magic bytes (not TIFF-based)
+  if (data.length >= 8 && buffer.startsWith(data, FILE_SIGNATURES.RAF)) {
+    return 'raw';
+  }
+
+  // Panasonic RW2 / Leica RWL: TIFF-LE variant with 0x55 at offset 2 instead of 0x2a
+  if (data.length >= 4 && buffer.startsWith(data, FILE_SIGNATURES.RW2)) {
+    return 'raw';
+  }
+
   // SVG: XML-based, check for <svg or <?xml
   if (isSvg(data)) {
     return 'svg';
@@ -247,6 +257,15 @@ function detectRawFormat(data: Uint8Array): SupportedFormat {
               return 'raw';
             }
             if (make.includes('SONY')) {
+              return 'raw';
+            }
+            if (make.includes('OLYMPUS')) {
+              return 'raw';
+            }
+            if (make.includes('PENTAX')) {
+              return 'raw';
+            }
+            if (make.includes('RICOH')) {
               return 'raw';
             }
           }

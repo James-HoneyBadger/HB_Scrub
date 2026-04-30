@@ -28,7 +28,7 @@ import {
   getSupportedFormats,
 } from '../src/index.js';
 
-import { handleRequest, buildOutputName } from '../src/gui.js';
+import { handleRequest, buildOutputName, MAX_BODY_SIZE } from '../src/gui.js';
 
 // ── Test server ───────────────────────────────────────────────────────────
 let server: http.Server;
@@ -490,4 +490,100 @@ describe('Unknown routes → 404', () => {
     const res = await fetch(`${baseUrl}/api/formats/`);
     expect(res.status).toBe(404);
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /health
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('GET /health', () => {
+  it('returns 200 with JSON content-type', async () => {
+    const res = await fetch(`${baseUrl}/health`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('application/json');
+  });
+
+  it('returns { status: "ok" }', async () => {
+    const body = await fetch(`${baseUrl}/health`).then((r) => r.json() as Promise<{ status: string }>);
+    expect(body.status).toBe('ok');
+  });
+
+  it('includes process pid in the response', async () => {
+    const body = await fetch(`${baseUrl}/health`).then((r) => r.json() as Promise<{ pid: number }>);
+    expect(typeof body.pid).toBe('number');
+    expect(body.pid).toBeGreaterThan(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPTIONS preflight (CORS)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('OPTIONS preflight', () => {
+  it('returns 204 for OPTIONS request', async () => {
+    const res = await fetch(`${baseUrl}/api/process`, { method: 'OPTIONS' });
+    expect(res.status).toBe(204);
+  });
+
+  it('includes Access-Control-Allow-Origin header', async () => {
+    const res = await fetch(`${baseUrl}/api/process`, { method: 'OPTIONS' });
+    expect(res.headers.get('access-control-allow-origin')).toBeTruthy();
+  });
+
+  it('includes Access-Control-Allow-Methods header', async () => {
+    const res = await fetch(`${baseUrl}/api/process`, { method: 'OPTIONS' });
+    const methods = res.headers.get('access-control-allow-methods') ?? '';
+    expect(methods).toContain('POST');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// X-Request-ID header
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('X-Request-ID header', () => {
+  it('response includes X-Request-ID for GET /', async () => {
+    const res = await fetch(`${baseUrl}/`);
+    expect(res.headers.get('x-request-id')).toBeTruthy();
+  });
+
+  it('echoes back the X-Request-ID from the request', async () => {
+    const requestId = 'test-trace-abc123';
+    const res = await fetch(`${baseUrl}/`, {
+      headers: { 'X-Request-ID': requestId },
+    });
+    expect(res.headers.get('x-request-id')).toBe(requestId);
+  });
+
+  it('generates a unique X-Request-ID when none supplied', async () => {
+    const [res1, res2] = await Promise.all([
+      fetch(`${baseUrl}/`),
+      fetch(`${baseUrl}/`),
+    ]);
+    const id1 = res1.headers.get('x-request-id');
+    const id2 = res2.headers.get('x-request-id');
+    expect(id1).toBeTruthy();
+    expect(id2).toBeTruthy();
+    expect(id1).not.toBe(id2);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 413 for oversized body
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('POST /api/process — 413 for oversized request', () => {
+  it('returns 413 when body exceeds MAX_BODY_SIZE', async () => {
+    // Send a body that is MAX_BODY_SIZE + 1 bytes so the server hits the
+    // accumulation guard and responds 413 before parsing JSON.
+    const largeBody = JSON.stringify({ name: 'x.jpg', data: 'A'.repeat(MAX_BODY_SIZE + 1) });
+    const res = await fetch(`${baseUrl}/api/process`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: largeBody,
+    });
+    expect(res.status).toBe(413);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain('byte limit');
+  }, 30_000);
 });

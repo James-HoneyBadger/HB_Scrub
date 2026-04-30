@@ -26,6 +26,10 @@ export interface StegoWarning {
   offset?: number;
   /** Size of the suspicious region in bytes */
   size?: number;
+  /** How serious this finding is */
+  severity: 'low' | 'medium' | 'high';
+  /** How confident we are that this is a real anomaly */
+  confidence: 'low' | 'medium' | 'high';
 }
 
 // ─── Format-specific scanners ────────────────────────────────────────────────
@@ -52,6 +56,8 @@ function scanJpeg(data: Uint8Array): StegoWarning[] {
         message: `${trailingSize} bytes of data after JPEG EOI marker — may contain appended payload`,
         offset: eoiOffset,
         size: trailingSize,
+        severity: trailingSize > 1024 ? 'high' : 'medium',
+        confidence: 'high',
       });
     }
   }
@@ -81,6 +87,8 @@ function scanJpeg(data: Uint8Array): StegoWarning[] {
           message: `JPEG comment contains steganography tool signature`,
           offset: i,
           size: segLen + 2,
+          severity: 'high',
+          confidence: 'high',
         });
       }
     }
@@ -119,6 +127,8 @@ function scanPng(data: Uint8Array): StegoWarning[] {
         message: `${trailingSize} bytes of data after PNG IEND chunk — may contain appended payload`,
         offset: iendOffset,
         size: trailingSize,
+        severity: trailingSize > 1024 ? 'high' : 'medium',
+        confidence: 'high',
       });
     }
   }
@@ -139,6 +149,8 @@ function scanPng(data: Uint8Array): StegoWarning[] {
         message: `Large private PNG chunk '${chunkType}' (${chunkLen} bytes) — may contain hidden data`,
         offset: off,
         size: chunkLen + 12,
+        severity: 'medium',
+        confidence: 'medium',
       });
     }
 
@@ -167,6 +179,8 @@ function scanGenericSignatures(data: Uint8Array): StegoWarning[] {
       warnings.push({
         code: 'stego-tool-signature',
         message: `Possible ${tool} signature detected in file tail`,
+        severity: 'high',
+        confidence: 'medium',
       });
       break;
     }

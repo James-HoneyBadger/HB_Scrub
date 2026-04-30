@@ -2,12 +2,50 @@
  * Base error class for HB_Scrub errors
  */
 export class HbScrubError extends Error {
-  constructor(message: string) {
+  /** Machine-readable error code (kebab-case). */
+  public readonly code: string;
+  /** Underlying cause (wraps platform / library errors). */
+  public override readonly cause?: unknown;
+  /** Additional context for debugging (e.g. file path, byte offset). */
+  public readonly context?: Record<string, unknown>;
+  /** Human-readable suggestion for resolving this error. */
+  public readonly recoveryHint?: string;
+
+  constructor(
+    message: string,
+    options?: {
+      code?: string;
+      cause?: unknown;
+      context?: Record<string, unknown>;
+      recoveryHint?: string;
+    }
+  ) {
     super(message);
     this.name = 'HbScrubError';
+    this.code = options?.code ?? 'hb-scrub-error';
+    if (options?.cause !== undefined) {
+      this.cause = options.cause;
+    }
+    if (options?.context !== undefined) {
+      this.context = options.context;
+    }
+    if (options?.recoveryHint !== undefined) {
+      this.recoveryHint = options.recoveryHint;
+    }
     Object.setPrototypeOf(this, new.target.prototype);
   }
+
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      code: this.code,
+      message: this.message,
+      ...(this.context !== undefined && { context: this.context }),
+      ...(this.recoveryHint !== undefined && { recoveryHint: this.recoveryHint }),
+    };
+  }
 }
+
 
 /**
  * Thrown when the input data is not a valid image format

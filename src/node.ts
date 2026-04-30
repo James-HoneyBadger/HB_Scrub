@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rename, unlink } from 'node:fs/promises';
 import { resolve, dirname, basename, extname, join } from 'node:path';
 import { removeMetadataSync } from './operations/remove.js';
 import type { RemoveOptions, RemoveResult } from './types.js';
@@ -48,7 +48,17 @@ export async function processFile(
   }
 
   await mkdir(dirname(absOutput), { recursive: true });
-  await writeFile(absOutput, result.data);
+  // Atomic write: write to a temp file then rename to avoid partial output on crash.
+  const tmpPath = `${absOutput}.hbtmp.${Math.random().toString(36).slice(2)}`;
+  try {
+    await writeFile(tmpPath, result.data);
+    await rename(tmpPath, absOutput);
+  } catch (err) {
+    await unlink(tmpPath).catch(() => {
+      /* ignore cleanup errors */
+    });
+    throw err;
+  }
 
   return { ...result, inputPath: absInput, outputPath: absOutput };
 }
