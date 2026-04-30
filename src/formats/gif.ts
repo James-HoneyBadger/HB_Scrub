@@ -53,11 +53,17 @@ function validateHeader(data: Uint8Array): 'GIF87a' | 'GIF89a' {
 /**
  * Read sub-blocks (used in extensions and image data)
  */
+const MAX_SUBBLOCK_ITERATIONS = 65536;
+
 function readSubBlocks(data: Uint8Array, offset: number): { data: Uint8Array; nextOffset: number } {
   const blocks: Uint8Array[] = [];
   let pos = offset;
+  let iterations = 0;
 
   while (pos < data.length) {
+    if (++iterations > MAX_SUBBLOCK_ITERATIONS) {
+      throw new CorruptedFileError('Invalid GIF: too many sub-blocks', pos);
+    }
     const blockSize = data[pos]!;
     pos += 1;
 

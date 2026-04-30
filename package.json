@@ -1,6 +1,6 @@
 {
   "name": "hb-scrub",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "Remove EXIF, GPS, and other metadata from images and documents. Supports JPEG, PNG, WebP, GIF, SVG, TIFF, HEIC, AVIF, PDF, MP4/MOV, and RAW formats.",
   "type": "module",
   "main": "dist/hb-scrub.cjs",
@@ -56,6 +56,7 @@
     "electron:build:linux": "npm run build && electron-builder --linux --publish never",
     "electron:build:win": "npm run build && electron-builder --win --publish never",
     "electron:build:mac": "npm run build && electron-builder --mac --publish never",
+    "verify:dist": "node -e \"require('./dist/hb-scrub.cjs')\" && echo 'CJS OK' && node --input-type=module -e \"import('./dist/hb-scrub.js').then(() => console.log('ESM OK'))\"",
     "prepublishOnly": "npm run build && npm run test && npm run lint"
   },
   "keywords": [
@@ -85,6 +86,7 @@
     "batch"
   ],
   "author": "James Temple <james@honey-badger.org>",
+  "homepage": "https://github.com/James-HoneyBadger/HB_Scrub#readme",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -112,7 +114,8 @@
     "vitest": "^4.0.18"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.12.0",
+    "npm": ">=10.0.0"
   },
   "overrides": {
     "ajv": "^8.0.0",

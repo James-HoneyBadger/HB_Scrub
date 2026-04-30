@@ -180,9 +180,6 @@ INJECTION
   --inject-description <text> Inject image description into output
   --inject-datetime <text>    Inject date/time into output (ISO 8601 or TIFF format)
 
-PDF
-  --pdf-password <pass>       Password for encrypted PDFs
-
 PROFILES (shorthand option sets)
   --profile privacy           Strip GPS, device info, software; keep orientation + ICC
   --profile sharing           Strip GPS & device info; keep orientation, ICC, copyright
@@ -235,7 +232,6 @@ interface CliArgs {
   injectArtist?: string;
   injectDescription?: string;
   injectDatetime?: string;
-  pdfPassword?: string;
   stegoCheck: boolean;
   diff: boolean;
   concurrency: number;
@@ -386,12 +382,6 @@ export function parseArgs(raw: string[]): CliArgs {
         const [ni, v] = take(i, a, raw);
         i = ni;
         args.injectDatetime = v;
-        break;
-      }
-      case '--pdf-password': {
-        const [ni, v] = take(i, a, raw);
-        i = ni;
-        args.pdfPassword = v;
         break;
       }
       case '--concurrency': {
@@ -607,7 +597,6 @@ export function loadRcFile(): string[] {
     'concurrency', 'dry-run', 'skip-existing', 'backup',
     'include', 'exclude',
     'report', 'watch', 'output-format', 'profile',
-    'pdf-password',
   ]);
 
   for (const candidate of candidates) {
@@ -643,6 +632,45 @@ export function loadRcFile(): string[] {
 
 // ─── Build shared options ─────────────────────────────────────────────────────
 
+// Maximum byte lengths for injected metadata fields (ASCII; EXIF limit is 65535,
+// but values this long are pathological and likely indicate a usage error).
+const INJECT_LIMITS: Record<string, number> = {
+  copyright:        255,
+  software:         255,
+  artist:           255,
+  imageDescription: 1000,
+};
+
+/** ISO 8601 or TIFF datetime: YYYY:MM:DD HH:MM:SS */
+const DATETIME_RE = /^\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}$/;
+
+/**
+ * Validate parsed CLI arguments for logical conflicts and exit with an error if found.
+ */
+export function validateOptions(a: CliArgs): void {
+  // --in-place and --output are mutually exclusive
+  if (a.inPlace && a.outputPath !== undefined) {
+    console.error('Error: --in-place and --output cannot be used together');
+    process.exit(EXIT_CODES.CONFIG_ERROR);
+  }
+
+  // --remove and --keep with overlapping fields is contradictory
+  if (a.remove !== undefined && a.keep !== undefined) {
+    const overlap = a.remove.filter(f => a.keep!.includes(f));
+    if (overlap.length > 0) {
+      console.error(
+        `Error: the same field(s) appear in both --remove and --keep: ${overlap.join(', ')}`
+      );
+      process.exit(EXIT_CODES.CONFIG_ERROR);
+    }
+  }
+
+  // --suffix is ignored when --in-place is set
+  if (a.inPlace && a.suffix !== undefined) {
+    console.error('Warning: --suffix is ignored when --in-place is used');
+  }
+}
+
 export function buildOptions(a: CliArgs): ProcessFileOptions & BatchOptions {
   const opts: ProcessFileOptions & BatchOptions = {
     inPlace: a.inPlace,
@@ -657,7 +685,6 @@ export function buildOptions(a: CliArgs): ProcessFileOptions & BatchOptions {
     ...(a.keep !== undefined && { keep: a.keep }),
     ...(a.gpsRedact !== undefined && { gpsRedact: a.gpsRedact }),
     ...(a.backup !== undefined && { backupSuffix: a.backup }),
-    ...(a.pdfPassword !== undefined && { pdfPassword: a.pdfPassword }),
   };
 
   if (
@@ -667,6 +694,24 @@ export function buildOptions(a: CliArgs): ProcessFileOptions & BatchOptions {
     a.injectDescription !== undefined ||
     a.injectDatetime !== undefined
   ) {
+    // Validate field lengths before they reach the EXIF writer.
+    const checks: Array<[string, string | undefined, number]> = [
+      ['--inject-copyright',   a.injectCopyright,  INJECT_LIMITS['copyright']!],
+      ['--inject-software',    a.injectSoftware,   INJECT_LIMITS['software']!],
+      ['--inject-artist',      a.injectArtist,     INJECT_LIMITS['artist']!],
+      ['--inject-description', a.injectDescription, INJECT_LIMITS['imageDescription']!],
+    ];
+    for (const [flag, val, max] of checks) {
+      if (val !== undefined && val.length > max) {
+        console.error(`Error: ${flag} value exceeds ${max} character limit (got ${val.length})`);
+        process.exit(EXIT_CODES.CONFIG_ERROR);
+      }
+    }
+    if (a.injectDatetime !== undefined && !DATETIME_RE.test(a.injectDatetime)) {
+      console.error('Error: --inject-datetime must be in YYYY:MM:DD HH:MM:SS format');
+      process.exit(EXIT_CODES.CONFIG_ERROR);
+    }
+
     opts.inject = {
       ...(a.injectCopyright !== undefined && { copyright: a.injectCopyright }),
       ...(a.injectSoftware !== undefined && { software: a.injectSoftware }),
@@ -750,6 +795,7 @@ async function main(): Promise<void> {
   }
 
   const a = applyProfile(parseArgs(rawArgs));
+  validateOptions(a);
   const baseOpts = buildOptions(a);
 
   // ── Watch mode ──

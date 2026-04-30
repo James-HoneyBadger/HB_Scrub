@@ -29,6 +29,25 @@ let watchHandle = null;
 let ownsGuiServer = false;
 let isQuitting = false;
 
+// ─── Single-instance lock ─────────────────────────────────────────────────────
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+}
+
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
+// ─── Collect any file paths passed on the CLI ─────────────────────────────────
+function getInitialFiles() {
+  const args = app.isPackaged ? process.argv.slice(1) : process.argv.slice(2);
+  return args.filter((a) => !a.startsWith('--') && fs.existsSync(a));
+}
+
 // ─── Start the GUI HTTP server as a child process ────────────────────────────
 
 function startServer(port) {
@@ -42,8 +61,11 @@ function startServer(port) {
   guiServer.stderr.on('data', (d) => process.stderr.write(d));
 
   guiServer.on('exit', (code) => {
-    if (ownsGuiServer && code !== 0 && code !== null) {
-      console.error(`GUI server exited with code ${code}`);
+    if (ownsGuiServer && code !== 0 && code !== null && !isQuitting) {
+      console.error(`GUI server exited with code ${code}; restarting in 1 s…`);
+      setTimeout(() => {
+        if (!isQuitting) startServer(serverPort);
+      }, 1000);
     }
   });
 }
@@ -273,8 +295,9 @@ function createTray() {
 // ─── App lifecycle ───────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
-  serverPort = await pickServerPort(DEFAULT_PORT);
-  ownsGuiServer = !(await isHbScrubServer(serverPort));
+  const { port, source } = await pickServerPort(DEFAULT_PORT);
+  serverPort = port;
+  ownsGuiServer = source !== 'existing';
 
   if (ownsGuiServer) {
     startServer(serverPort);
@@ -296,6 +319,21 @@ app.whenReady().then(async () => {
 
   createWindow();
   createTray();
+
+  // Pre-load files supplied on the command line (e.g. hb-scrub photo.jpg)
+  const initialFiles = getInitialFiles();
+  if (initialFiles.length > 0 && mainWindow) {
+    Promise.all(
+      initialFiles.map(async (fp) => {
+        const buf = await fs.promises.readFile(fp);
+        return { name: path.basename(fp), data: buf.toString('base64') };
+      })
+    )
+      .then((files) => {
+        mainWindow.webContents.send('initial-files', files);
+      })
+      .catch(() => undefined);
+  }
 });
 
 app.on('window-all-closed', () => {

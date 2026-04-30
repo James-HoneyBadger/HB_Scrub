@@ -15,7 +15,7 @@ Complete API surface, type definitions, format handler internals, binary utiliti
 7. [Error Classes](#7-error-classes)
 8. [File Signatures](#8-file-signatures)
 9. [Format Detection](#9-format-detection)
-10. [Electron Main Process](#10-electron-main-process)
+10. [Desktop Shells (Tauri & Electron)](#10-desktop-shells-tauri--electron)
 11. [Build Outputs](#11-build-outputs)
 12. [Source Layout](#12-source-layout)
 
@@ -862,9 +862,29 @@ FILE_SIGNATURES.FTYP       // Uint8Array — 'ftyp' (HEIC / ISOBMFF, at offset 4
 
 ---
 
-## 10. Electron Main Process
+## 10. Desktop Shells (Tauri & Electron)
+
+### 10.1 Tauri Shell (primary)
+
+Source: `src-tauri/src/main.rs`, config: `src-tauri/tauri.conf.json`
+
+The **Tauri shell is the primary desktop target** for production builds and the standalone installer. It is smaller, uses the system WebView, and requires no bundled Chromium.
+
+The Tauri app communicates with the same local HTTP server (`dist/hb-scrub.gui.js`) via a localhost connection. File selection uses Tauri's native dialog plugin — the result is sent to the embedded WebView exactly as in the Electron flow.
+
+Build for all platforms:
+
+```bash
+npm run tauri:build
+```
+
+See [Installation Guide](./installation.md) for platform-specific prerequisites and installer paths.
+
+### 10.2 Electron Shell (legacy)
 
 Source: `electron/main.cjs`
+
+The Electron wrapper remains in the repository for reference and legacy compatibility. It is **not the recommended distribution path** — use the Tauri build for new deployments.
 
 The Electron entry point:
 
@@ -878,7 +898,7 @@ The Electron entry point:
 8. `startWatch(dir)` / `stopWatch()` — uses `fs.watch` on a selected directory; each new supported file is pushed to the renderer via `webContents.send('watch-file', { name, base64, mime })`
 9. Kills the child server process and stops the watcher on `will-quit`
 
-### Preload bridge (`electron/preload.cjs`)
+#### Preload bridge (`electron/preload.cjs`)
 
 Exposes a safe API to the renderer via `contextBridge`:
 
@@ -937,7 +957,10 @@ src/
   signatures.ts         FILE_SIGNATURES magic byte constants
   errors.ts             Error class definitions
   cli.ts                CLI entry point (parseArgs, applyProfile, loadRcFile, PROFILES)
-  gui.ts                Local web GUI (HTTP server + embedded HTML/CSS/JS)
+  gui.ts                Local web GUI — thin entry point; re-exports from gui/server.ts
+  gui/
+    template.ts         Embedded single-page application (HTML + inline CSS/JS)
+    server.ts           HTTP request handler (handleRequest, buildOutputName)
   node.ts               Node.js file API (processFile, processDir, …)
   node-stream.ts        Node.js Transform stream (createScrubStream)
 
@@ -971,7 +994,7 @@ src/
     batch.ts            processDir / processFiles (incl. matchGlob)
 
 electron/
-  main.cjs              Electron main process — spawns GUI server, IPC, Tray, watch
+  main.cjs              Electron main process (legacy) — spawns GUI server, IPC, Tray, watch
   preload.cjs           contextBridge: exposes electronAPI to renderer
 ```
 

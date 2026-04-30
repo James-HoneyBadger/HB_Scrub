@@ -145,6 +145,94 @@ This removes all installed files, symlinks, icons, and the desktop entry.
 
 ---
 
+## 3a. Standalone Application (macOS)
+
+HB Scrub can be built as a native `.app` bundle on macOS using Tauri.
+
+### Prerequisites
+
+- Node.js ≥ 20.0.0
+- Rust toolchain (`rustup` — [rustup.rs](https://rustup.rs))
+- Xcode Command Line Tools: `xcode-select --install`
+
+### Step 1: Clone and build
+
+```bash
+git clone https://github.com/James-HoneyBadger/HB_Scrub.git
+cd HB_Scrub
+npm install
+npm run tauri:build
+```
+
+The build produces a `.app` bundle and a `.dmg` installer under `src-tauri/target/release/bundle/macos/` and `src-tauri/target/release/bundle/dmg/` respectively.
+
+### Step 2: Install
+
+Open the generated `.dmg` and drag **HB Scrub** to `/Applications`, or run the app directly from the bundle.
+
+### Run the CLI on macOS
+
+After building, the CLI is available via `npx` or a global `npm install -g hb-scrub`. The Tauri app handles the GUI; no separate install script is provided for macOS because the `.app` bundle is self-contained.
+
+### Uninstall
+
+Drag the app from `/Applications` to the Trash. The CLI global install can be removed with:
+
+```bash
+npm uninstall -g hb-scrub
+```
+
+---
+
+## 3b. Standalone Application (Windows)
+
+HB Scrub can be built as a native Windows installer using Tauri.
+
+### Prerequisites
+
+- Node.js ≥ 20.0.0 ([nodejs.org](https://nodejs.org))
+- Rust toolchain — install via [rustup.rs](https://rustup.rs) (select the MSVC toolchain when prompted)
+- Microsoft C++ Build Tools or Visual Studio 2022 with the **Desktop development with C++** workload
+- WebView2 Runtime (ships with Windows 10/11; available separately at [developer.microsoft.com/en-us/microsoft-edge/webview2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/))
+
+### Step 1: Clone and build
+
+Open a **Developer Command Prompt** or PowerShell:
+
+```powershell
+git clone https://github.com/James-HoneyBadger/HB_Scrub.git
+cd HB_Scrub
+npm install
+npm run tauri:build
+```
+
+The build produces an `.msi` installer and a standalone `.exe` under `src-tauri\target\release\bundle\msi\` and `src-tauri\target\release\bundle\nsis\` respectively.
+
+### Step 2: Install
+
+Run the generated `.msi` or `.exe` installer. The installer registers the application with Windows and adds it to the Start menu.
+
+### Run the CLI on Windows
+
+After the npm install, the CLI is available via:
+
+```powershell
+npx hb-scrub photo.jpg
+# or globally:
+npm install -g hb-scrub
+hb-scrub photo.jpg
+```
+
+### Uninstall
+
+Use **Settings → Apps** (or **Control Panel → Programs and Features**) to uninstall HB Scrub. The global CLI install can be removed with:
+
+```powershell
+npm uninstall -g hb-scrub
+```
+
+---
+
 ## 4. Desktop App (Tauri) — Run from Source
 
 HB_Scrub includes a standalone Tauri desktop application — a full GUI with drag-and-drop, local-only processing, and a lighter desktop shell.

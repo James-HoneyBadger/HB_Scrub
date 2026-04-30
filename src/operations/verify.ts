@@ -151,6 +151,9 @@ export function verifyCleanSync(input: Uint8Array | ArrayBuffer | string): Verif
     clean: remainingMetadata.length === 0,
     format,
     remainingMetadata,
+    ...(remainingMetadata.length > 0 && {
+      remainingMetadataBreakdown: Object.fromEntries(remainingMetadata.map(t => [t, 1])),
+    }),
     confidence: getConfidence(format),
     warnings,
   };

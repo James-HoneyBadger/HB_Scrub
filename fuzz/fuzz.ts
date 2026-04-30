@@ -42,7 +42,24 @@ const GIF_MIN = new Uint8Array([
   0x3b, // trailer
 ]);
 
-const SEEDS = [JPEG_MIN, PNG_MIN, GIF_MIN];
+// Minimal PDF with Info dict and XMP stream
+const PDF_MIN = new TextEncoder().encode(
+  '%PDF-1.4\n' +
+  '1 0 obj\n<</Title (Test) /Author (Test)>>\nendobj\n' +
+  '2 0 obj\n<</Type /Metadata /Subtype /XML>>\nstream\n<x:xmpmeta/>\nendstream\nendobj\n' +
+  'xref\n0 3\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n' +
+  'trailer\n<</Size 3 /Info 1 0 R>>\nstartxref\n150\n%%EOF\n'
+);
+
+// Minimal HEIC stub (ftyp box with heic brand)
+const HEIC_MIN = new Uint8Array([
+  0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, // size=24, 'ftyp'
+  0x68, 0x65, 0x69, 0x63,                           // major brand 'heic'
+  0x00, 0x00, 0x00, 0x00,                           // minor version
+  0x68, 0x65, 0x69, 0x63, 0x6d, 0x69, 0x66, 0x31, // compatible: 'heic','mif1'
+]);
+
+const SEEDS = [JPEG_MIN, PNG_MIN, GIF_MIN, PDF_MIN, HEIC_MIN];
 
 // ─── Mutators ────────────────────────────────────────────────────────────────
 

@@ -51,6 +51,40 @@ export type MetadataFieldName =
   | (string & {});
 
 /**
+ * Exhaustive tuple of the well-known MetadataFieldName literals.
+ * Useful for runtime validation of user-supplied field names.
+ */
+export const VALID_FIELD_NAMES = [
+  'GPS',
+  'EXIF',
+  'XMP',
+  'ICC Profile',
+  'IPTC',
+  'Copyright',
+  'Orientation',
+  'Make',
+  'Model',
+  'Software',
+  'DateTime',
+  'Artist',
+  'Comment',
+  'Adobe',
+  'Thumbnail',
+  'Title',
+  'Description',
+] as const;
+
+/**
+ * Type guard that narrows a string to a known MetadataFieldName.
+ * Returns `true` for any of the literals in `VALID_FIELD_NAMES`.
+ */
+export function isValidFieldName(
+  value: string
+): value is (typeof VALID_FIELD_NAMES)[number] {
+  return (VALID_FIELD_NAMES as readonly string[]).includes(value);
+}
+
+/**
  * Fields to inject into the output after metadata removal
  */
 export interface MetadataInjectOptions {
@@ -95,6 +129,18 @@ export interface ExifData {
   whiteBalance?: number;
   exposureMode?: number;
   exposureProgram?: number;
+  /** EXIF tag 0x9207 — metering mode (average, spot, etc.) */
+  meteringMode?: number;
+  /** EXIF tag 0xA401 — custom rendered flag */
+  customRendered?: number;
+  /** EXIF tag 0xA406 — scene capture type (standard, landscape, portrait, …) */
+  sceneCaptureType?: number;
+  /** EXIF tag 0xA430 — camera owner name */
+  cameraOwnerName?: string;
+  /** EXIF tag 0xA431 — body serial number */
+  bodySerialNumber?: string;
+  /** EXIF tag 0xA432 — lens specification (min/max focal length, aperture) */
+  lensSpecification?: number[];
 }
 
 /**
@@ -151,12 +197,6 @@ export interface RemoveOptions {
    * Inject these fields into the cleaned output (JPEG, PNG).
    */
   inject?: MetadataInjectOptions;
-
-  /**
-   * Password for encrypted PDFs. If provided, the handler will attempt
-   * to decrypt the PDF before stripping metadata.
-   */
-  pdfPassword?: string;
 }
 
 /**
@@ -200,6 +240,8 @@ export interface ReadResult {
    * Examples: malformed EXIF block, truncated GPS data.
    */
   warnings: string[];
+  /** Milliseconds taken to read metadata (wall-clock time). */
+  readTime?: number;
 }
 
 /**
@@ -212,6 +254,12 @@ export interface VerifyResult {
   format: SupportedFormat;
   /** Metadata type names still present (empty when `clean` is `true`). */
   remainingMetadata: string[];
+  /**
+   * Per-type breakdown of remaining metadata categories.
+   * Keys are metadata type names; values are counts (usually 1).
+   * Only populated when there is remaining metadata.
+   */
+  remainingMetadataBreakdown?: Record<string, number>;
   /**
    * Confidence level of the result.
    * - `'high'`   — format with complete metadata parsing (JPEG, PNG, WebP, TIFF, HEIC, AVIF)

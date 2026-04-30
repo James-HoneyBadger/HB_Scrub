@@ -63,10 +63,12 @@ export type { ExitCode } from './cli.js';
 export {
   registerFormat,
   unregisterFormat,
+  clearAllPlugins,
+  registerFormats,
   getPlugin,
   getRegisteredFormats,
 } from './plugins.js';
-export type { FormatPlugin } from './plugins.js';
+export type { FormatPlugin, RegisterFormatOptions } from './plugins.js';
 
 // Format-specific exports for advanced usage
 export { jpeg } from './formats/jpeg.js';
